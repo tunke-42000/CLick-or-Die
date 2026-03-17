@@ -23,7 +23,18 @@ function getRank(score) {
   if (score >= 2500) return "B";
   return "C";
 }
-
+function getJudgement(reaction) {
+  if (reaction <= 150) {
+    return { label: "PERFECT", bonus: 80 };
+  }
+  if (reaction <= 250) {
+    return { label: "GREAT", bonus: 50 };
+  }
+  if (reaction <= 400) {
+    return { label: "GOOD", bonus: 25 };
+  }
+  return { label: "SLOW", bonus: 0 };
+}
 function StatCard({ label, value, danger = false }) {
   return (
     <div className={`stat ${danger ? "danger" : ""}`}>
@@ -171,8 +182,22 @@ const endGame = () => {
 const handleCorrect = () => {
   const reaction = Date.now() - reactionStart;
   const nextCombo = combo + 1;
-  const speedBonus = Math.max(0, 50 - Math.floor(reaction / 20));
-  const gained = 100 + nextCombo * 10 + speedBonus;
+
+  const judgement = getJudgement(reaction);
+  const gained = 100 + nextCombo * 10 + judgement.bonus;
+
+  setScore((prev) => prev + gained);
+  setCombo(nextCombo);
+  setMaxCombo((prev) => Math.max(prev, nextCombo));
+  setCorrectCount((prev) => prev + 1);
+  setTotalReaction((prev) => prev + reaction);
+  setSuccessfulHits((prev) => prev + 1);
+
+  playSuccessSound();
+  setMessage(judgement.label);
+  setFlashType("success");
+  spawnNextKey(currentKey);
+};
 
   setScore((prev) => prev + gained);
   setCombo(nextCombo);
@@ -398,7 +423,7 @@ const handleTimeout = () => {
                     <div className="side-title">How to Survive</div>
                     <ul className="help-list">
                       <li>中央のキーを押す</li>
-                      <li>正解で加点、コンボ継続</li>
+                      <li>速いほど高評価・高得点</li>
                       <li>間違えると減点</li>
                       <li>遅すぎるとライフ減少</li>
                       <li>後半ほど制限時間が短くなる</li>

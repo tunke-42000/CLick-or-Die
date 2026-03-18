@@ -300,6 +300,8 @@ export default function App() {
   const [resultSaved, setResultSaved] = useState(false);
   const [timeLeft, setTimeLeft] = useState(GAME_TIME);
   const [lives, setLives] = useState(STARTING_LIVES);
+  const [battleHp, setBattleHp] = useState(100);
+  const [attackGauge, setAttackGauge] = useState(0);
 
   const [gameMode, setGameMode] = useState("single");
   const [roomIdInput, setRoomIdInput] = useState("");
@@ -374,18 +376,27 @@ export default function App() {
 
   const handleIncomingAttack = (type) => {
     switch(type) {
-      case "scoreBreak":
+      case "pulse":
+        setBattleHp(s => Math.max(0, s - 6));
+        setMessage({ text: "UNDER ATTACK: PULSE -6", type: "bad", id: Date.now() });
+        setFlashType("trap");
+        setLastDamageTaken("PULSE SHOT");
+        break;
+      case "break":
+        setBattleHp(s => Math.max(0, s - 10));
         setScore(s => Math.max(0, s - 15));
-        setMessage({ text: "UNDER ATTACK: SCORE BREAK -15", type: "bad", id: Date.now() });
+        setMessage({ text: "SYSTEM DAMAGED: BREAK SHOT", type: "bad", id: Date.now() });
         setFlashType("trap");
         setGlitchAnim((prev) => prev + 1);
-        setLastDamageTaken("SCORE BREAK");
+        setLastDamageTaken("BREAK SHOT");
         break;
       case "timeJam":
-        jamChargesRef.current += 3;
-        setMessage({ text: "UNDER ATTACK: TIME JAM!", type: "bad", id: Date.now() });
+      case "jam":
+        setBattleHp(s => Math.max(0, s - 8));
+        jamChargesRef.current += 2;
+        setMessage({ text: "SYSTEM JAMMED!", type: "bad", id: Date.now() });
         setFlashType("trap");
-        setLastDamageTaken("TIME JAM");
+        setLastDamageTaken("JAM ATTACK");
         break;
       case "fakeBoost":
         fakeBoostChargesRef.current += 3;
@@ -394,8 +405,9 @@ export default function App() {
         setLastDamageTaken("FAKE BOOST");
         break;
       case "overdrive":
-        setScore(s => Math.max(0, s - 30));
-        setMessage({ text: "CRITICAL: OVERDRIVE -30!", type: "bad", id: Date.now() });
+        setBattleHp(s => Math.max(0, s - 16));
+        fakeBoostChargesRef.current += 2;
+        setMessage({ text: "CRITICAL: OVERDRIVE HIT!", type: "bad", id: Date.now() });
         setFlashType("trap");
         setGlitchAnim(2);
         playTone({ frequency: 150, sweepTo: 50, duration: 0.8, type: "sawtooth", volume: 0.1 });
@@ -476,6 +488,8 @@ export default function App() {
               setTimeLeft(GAME_TIME);
               timeLeftRef.current = GAME_TIME;
               setLives(STARTING_LIVES);
+              setBattleHp(100);
+              setAttackGauge(0);
               setCombo(0);
               setMaxCombo(0);
               setCorrectCount(0);
@@ -567,6 +581,8 @@ export default function App() {
     setTimeLeft(GAME_TIME);
     timeLeftRef.current = GAME_TIME;
     setLives(STARTING_LIVES);
+    setBattleHp(100);
+    setAttackGauge(0);
     setCombo(0);
     setMaxCombo(0);
     setCorrectCount(0);
@@ -620,7 +636,7 @@ export default function App() {
     setScreen("title");
   };
 
-  const sendAttack = (type) => {
+  const sendAttack = (type, msg) => {
     if (gameMode !== "multi" || !myRoomId || !opponentUid) return;
     
     const attacksRef = ref(db, `rooms/${myRoomId}/attacks`);
@@ -630,17 +646,54 @@ export default function App() {
       timestamp: Date.now()
     }).catch(() => {});
 
-    let msg = "";
-    if (type === "scoreBreak") msg = "ATTACK SENT: SCORE BREAK";
-    if (type === "timeJam") msg = "ATTACK SENT: TIME JAM";
-    if (type === "fakeBoost") msg = "ATTACK SENT: FAKE BOOST";
-    if (type === "overdrive") msg = "ATTACK SENT: OVERDRIVE";
-    
     setMessage({ text: msg, type: "good", id: Date.now() });
     setLastAttackSent(msg.split(": ")[1]);
     
     setEnemyHitAnim(true);
     setTimeout(() => setEnemyHitAnim(false), 500);
+  };
+
+  const manualAttackTrigger = () => {
+    if (gameMode !== "multi" || attackGauge < 25) return;
+    
+    let type = "pulse";
+    let cost = 25;
+    let msg = "ATTACK SENT: PULSE SHOT";
+
+    if (attackGauge >= 100) {
+      type = "overdrive";
+      cost = 100;
+      msg = "ATTACK SENT: OVERDRIVE";
+    } else if (attackGauge >= 75) {
+      type = "jam";
+      cost = 75;
+      msg = "ATTACK SENT: JAM ATTACK";
+    } else if (attackGauge >= 50) {
+      type = "break";
+      cost = 50;
+      msg = "ATTACK SENT: BREAK SHOT";
+    }
+
+    setAttackGauge(prev => prev - cost);
+    sendAttack(type, msg);
+  };
+
+  const addGauge = (amount) => {
+    if (gameMode === "multi") {
+      setAttackGauge(prev => {
+        const next = Math.max(0, Math.min(100, prev + amount));
+        if (next >= 100) {
+          // Auto fire overdrive to save full bar lockup, or just let them press it.
+          // Spec: "ゲージ到達で自動攻撃". Let's auto fire overdrive if hits 100, but allow manual for < 100!
+          setTimeout(() => {
+             setAttackGauge(0);
+             sendAttack("overdrive", "ATTACK SENT: OVERDRIVE");
+          }, 0);
+          return 0;
+        }
+        return next;
+      });
+    }
   };
 
   const handleCorrect = () => {
@@ -667,11 +720,18 @@ export default function App() {
     setTotalReaction((prev) => prev + reaction);
     setSuccessfulHits((prev) => prev + 1);
 
-    if (gameMode === "multi" && screen === "playing") {
-      if (nextCombo === 5) sendAttack("scoreBreak");
-      else if (nextCombo === 10) sendAttack("timeJam");
-      else if (nextCombo === 15) sendAttack("fakeBoost");
-      else if (nextCombo === 20) sendAttack("overdrive");
+    if (gameMode === "multi") {
+      let g = 0;
+      if (judgement.msg === "PERFECT") g = 12;
+      else if (judgement.msg === "GREAT") g = 9;
+      else if (judgement.msg === "GOOD") g = 6;
+      else g = 3;
+
+      if (nextCombo >= 20) g += 3;
+      else if (nextCombo >= 10) g += 2;
+      else if (nextCombo >= 5) g += 1;
+
+      addGauge(g);
     }
 
     if (nextCombo > 0) {
@@ -690,6 +750,18 @@ export default function App() {
   };
 
   const handleWrong = () => {
+    if (gameMode === "multi") {
+      setScore((prev) => Math.max(0, prev - 8));
+      addGauge(-8);
+      if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
+      setCombo(0);
+      playMissSound();
+      setMessage({ text: "MISS", id: Date.now() });
+      setFlashType("miss");
+      spawnNextKey(currentKey);
+      return;
+    }
+
     setScore((prev) => Math.max(0, prev - 6));
     if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
     setCombo(0);
@@ -709,6 +781,19 @@ export default function App() {
   };
 
   const handleFakeHit = () => {
+    if (gameMode === "multi") {
+      setScore((prev) => Math.max(0, prev - 8));
+      addGauge(-10);
+      if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
+      setCombo(0);
+      playMissSound();
+      setMessage({ text: "TRAP", id: Date.now() });
+      setFlashType("trap");
+      setGlitchAnim(Date.now());
+      spawnNextKey(currentKey);
+      return;
+    }
+
     setScore((prev) => Math.max(0, prev - FAKE_PENALTY));
     if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
     setCombo(0);
@@ -756,12 +841,28 @@ export default function App() {
         }
       }
 
+      if (gameMode === "multi") {
+        addGauge(8);
+      }
+
       playFakeAvoidSound();
       setMessage({ text: "FAKE AVOID", id: Date.now() });
       setFlashType("fake-avoid");
       setAvoidedKey(currentKey);
 
       setTimeout(() => setAvoidedKey(null), 350);
+      spawnNextKey(currentKey);
+      return;
+    }
+
+    if (gameMode === "multi") {
+      setScore((prev) => Math.max(0, prev - 8));
+      addGauge(-8);
+      if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
+      setCombo(0);
+      playMissSound();
+      setMessage({ text: "TOO SLOW", id: Date.now() });
+      setFlashType("miss");
       spawnNextKey(currentKey);
       return;
     }
@@ -785,9 +886,21 @@ export default function App() {
 
   useEffect(() => {
     if (gameMode === "multi" && screen === "playing" && myPlayerRef.current && myUid) {
-      update(myPlayerRef.current, { score, lives, status: lives <= 0 ? "dead" : "alive" }).catch(() => {});
+      update(myPlayerRef.current, { 
+        score, 
+        battleHp, 
+        attackGauge, 
+        lives,
+        status: battleHp <= 0 ? "dead" : "alive" 
+      }).catch(() => {});
     }
-  }, [score, lives, gameMode, screen, myUid]);
+  }, [score, battleHp, attackGauge, lives, gameMode, screen, myUid]);
+
+  useEffect(() => {
+    if (gameMode === "multi" && screen === "playing" && battleHp <= 0) {
+      endGame();
+    }
+  }, [battleHp, screen, gameMode]);
 
   useEffect(() => {
     if (screen === "playing" && gameMode === "multi" && opponentStatus === "disconnected") {
@@ -916,6 +1029,12 @@ export default function App() {
 
     const onKeyDown = (e) => {
       if (e.repeat) return;
+
+      if (e.code === "Space" && gameMode === "multi" && screen === "playing") {
+        e.preventDefault();
+        manualAttackTrigger();
+        return;
+      }
 
       const pressed = e.key.toUpperCase();
       if (pressed.length !== 1) return;
@@ -1098,12 +1217,35 @@ export default function App() {
                   value={timeLeft}
                   danger={timeLeft <= 10 && screen === "playing"}
                 />
-                <StatCard
-                  label="HP"
-                  value={hpDisplay}
-                  hearts
-                  danger={lives === 1 && screen === "playing"}
-                />
+                
+                {gameMode === "multi" ? (
+                  <div className="multi-hud" style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%", maxWidth: "300px" }}>
+                    <div className="hud-bar-wrap" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <div className="hud-label" style={{ fontSize: "14px", color: "#9ca3af", display: "flex", justifyContent: "space-between", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                        Battle HP <span><span style={{color: "white", fontWeight: "bold"}}>{battleHp}</span>/100</span>
+                      </div>
+                      <div className="hud-track" style={{ height: "12px", background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", overflow: "hidden" }}>
+                        <div className="hud-fill" style={{ height: "100%", width: `${Math.max(0, Math.min(100, battleHp))}%`, background: battleHp <= 20 ? "#ef4444" : "#22c55e", transition: "width 0.2s ease-out, background 0.2s" }} />
+                      </div>
+                    </div>
+                    <div className="hud-bar-wrap" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <div className="hud-label" style={{ fontSize: "14px", color: "#9ca3af", display: "flex", justifyContent: "space-between", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                        Attack Gauge <span><span style={{color: "white", fontWeight: "bold"}}>{attackGauge}</span>/100</span>
+                      </div>
+                      <div className="hud-track" style={{ height: "12px", background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", overflow: "hidden" }}>
+                        <div className={`hud-fill gauge-fill tier-${Math.floor(attackGauge/25)}`} style={{ height: "100%", width: `${Math.max(0, Math.min(100, attackGauge))}%`, transition: "width 0.2s ease-out" }} />
+                        <div style={{ position: "absolute", right: 0, top: -20, fontSize: 10, color: "#9ca3af" }}>[SPACE] TO ATTACK</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <StatCard
+                    label="HP"
+                    value={hpDisplay}
+                    hearts
+                    danger={lives === 1 && screen === "playing"}
+                  />
+                )}
               </section>
 
               <section className="game-grid">
@@ -1144,11 +1286,30 @@ export default function App() {
                     ) : (
                       <div className="key-box-wrapper">
                         {gameMode === "multi" ? (
-                          <div className="rank-box" style={{ fontSize: "48px", color: opponentStatus === "disconnected" ? "#93c5fd" : score > (opponentData?.score || 0) ? "#fcd34d" : score < (opponentData?.score || 0) ? "#ef4444" : "#d1d5db" }}>
-                            {opponentStatus === "disconnected" ? "WIN" :
-                              score > (opponentData?.score || 0) ? "WIN" :
-                                score < (opponentData?.score || 0) ? "LOSE" : "DRAW"}
-                          </div>
+                          <>
+                            <div className="rank-box" style={{ fontSize: "36px", color: opponentStatus === "disconnected" ? "#93c5fd" : battleHp <= 0 ? "#ef4444" : (opponentData?.battleHp || 0) <= 0 ? "#fcd34d" : battleHp > (opponentData?.battleHp || 0) ? "#fcd34d" : battleHp < (opponentData?.battleHp || 0) ? "#ef4444" : score > (opponentData?.score || 0) ? "#fcd34d" : score < (opponentData?.score || 0) ? "#ef4444" : "#d1d5db" }}>
+                              {opponentStatus === "disconnected" ? "WIN (DISCONNECT)" : 
+                               battleHp <= 0 ? "YOU LOSE (K.O.)" : 
+                               (opponentData?.battleHp || 0) <= 0 ? "YOU WIN (K.O.)" : 
+                               battleHp > (opponentData?.battleHp || 0) ? "YOU WIN (HP)" :
+                               battleHp < (opponentData?.battleHp || 0) ? "YOU LOSE (HP)" :
+                               score > (opponentData?.score || 0) ? "YOU WIN (SCORE)" : 
+                               score < (opponentData?.score || 0) ? "YOU LOSE (SCORE)" : "DRAW"}
+                            </div>
+                            <div className="multi-score-compare" style={{ display: "flex", gap: "32px", justifyContent: "center", marginTop: "16px" }}>
+                              <div style={{ textAlign: "center" }}>
+                                <div style={{ color: "#9ca3af", fontSize: "14px", letterSpacing: "0.1em" }}>YOU</div>
+                                <div style={{ fontSize: "24px", color: "white", fontWeight: "bold" }}>HP: {Math.max(0, battleHp)}</div>
+                                <div style={{ fontSize: "20px", color: "white" }}>PTS: {score}</div>
+                              </div>
+                              <div style={{ color: "#a855f7", fontSize: "24px", fontWeight: "bold", alignSelf: "center" }}>VS</div>
+                              <div style={{ textAlign: "center" }}>
+                                <div style={{ color: "#9ca3af", fontSize: "14px", letterSpacing: "0.1em" }}>ENEMY</div>
+                                <div style={{ fontSize: "24px", color: "white", fontWeight: "bold" }}>HP: {Math.max(0, opponentData?.battleHp || 0)}</div>
+                                <div style={{ fontSize: "20px", color: "white" }}>PTS: {opponentData?.score || 0}</div>
+                              </div>
+                            </div>
+                          </>
                         ) : (
                           <div className="rank-box">{getRank(score)}</div>
                         )}
@@ -1230,15 +1391,15 @@ export default function App() {
                       
                       <div className="feed-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "4px", paddingBottom: "12px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", width: "100%", fontSize: "14px" }}>
-                          <span>HP</span>
-                          <span className="feed-strong">{Math.max(0, opponentData.lives)}</span>
+                          <span>Battle HP</span>
+                          <span className="feed-strong">{Math.max(0, opponentData.battleHp ?? 100)}</span>
                         </div>
                         <div className="window-bar" style={{ height: "10px", marginTop: 0 }}>
                           <div 
-                            className={`window-fill ${opponentData.lives <= 1 ? "danger" : ""}`}
+                            className={`window-fill ${(opponentData.battleHp ?? 100) <= 20 ? "danger" : ""}`}
                             style={{ 
-                              width: `${(Math.max(0, opponentData.lives) / STARTING_LIVES) * 100}%`,
-                              background: opponentData.lives <= 1 ? "red" : "#22c55e",
+                              width: `${(Math.max(0, opponentData.battleHp ?? 100) / 100) * 100}%`,
+                              background: (opponentData.battleHp ?? 100) <= 20 ? "red" : "#22c55e",
                               transition: "width 0.3s ease-out, background 0.3s"
                             }} 
                           />
@@ -1248,15 +1409,11 @@ export default function App() {
                       <div style={{ borderTop: "1px solid rgba(168, 85, 247, 0.3)", paddingTop: "12px", fontSize: "12px", display: "flex", flexDirection: "column", gap: "4px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between" }}>
                           <span style={{ color: "#9ca3af" }}>Sent ATK:</span>
-                          <span style={{ color: lastAttackSent ? "#fcd34d" : "#4b5563" }}>{lastAttackSent || "NONE"}</span>
+                          <span style={{ color: lastAttackSent ? "#fcd34d" : "#4b5563", maxWidth: '100px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lastAttackSent || "NONE"}</span>
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between" }}>
                           <span style={{ color: "#9ca3af" }}>Rcv'd ATK:</span>
-                          <span style={{ color: lastDamageTaken ? "#ef4444" : "#4b5563" }}>{lastDamageTaken || "NONE"}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", borderTop: "1px dashed rgba(168, 85, 247, 0.3)", paddingTop: "8px" }}>
-                          <span style={{ color: "#9ca3af" }}>Attack Charge:</span>
-                          <span style={{ color: "#a855f7", fontWeight: "bold" }}>{combo >= 20 ? "MAX" : combo % 5 + "/5 Cmb"}</span>
+                          <span style={{ color: lastDamageTaken ? "#ef4444" : "#4b5563", maxWidth: '100px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lastDamageTaken || "NONE"}</span>
                         </div>
                       </div>
                     </div>

@@ -867,3 +867,9 @@ button {
 .enemy-hit-anim {
   animation: enemyHit 0.4s ease-out;
 }
+
+.gauge-fill { background: #d1d5db; }
+.gauge-fill.tier-1 { background: #3b82f6; } /* Pulse */
+.gauge-fill.tier-2 { background: #eab308; } /* Break */
+.gauge-fill.tier-3 { background: #a855f7; } /* Jam */
+.gauge-fill.tier-4 { background: #ef4444; } /* Overdrive */

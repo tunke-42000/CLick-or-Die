@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import clockTick from "./clock-tick.mp3";
 
 const KEYS = ["A", "S", "D", "F", "J", "K", "L", "Q", "W", "E", "R", "U", "I", "O", "P"];
-const GAME_TIME = 30;
+const GAME_TIME = 40;
 const STARTING_LIVES = 3;
-const BEST_SCORE_KEY = "click-or-die-best";
+const TOP_SCORES_KEY = "click-or-die-top3";
+const FAKE_KEY_CHANCE = 0.08;
+const FAKE_PENALTY = 10;
 
 function pickRandomKey(previous = "") {
   const pool = KEYS.filter((key) => key !== previous);
@@ -17,46 +20,161 @@ function getRoundWindow(correctCount) {
   return 2000;
 }
 
-function getRank(score) {
-  if (score >= 6500) return "S";
-  if (score >= 4500) return "A";
-  if (score >= 2500) return "B";
-  return "C";
+function formatDateTime(dateString) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
+
+function formatRank(index) {
+  if (index === 0) return "1st";
+  if (index === 1) return "2nd";
+  if (index === 2) return "3rd";
+  return `${index + 1}th`;
+}
+
+function updateTopScores(previousScores, newScore) {
+  const nextScores = [
+    ...previousScores,
+    {
+      score: newScore,
+      playedAt: new Date().toISOString(),
+    },
+  ]
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime()
+    )
+    .slice(0, 3);
+
+  try {
+    localStorage.setItem(TOP_SCORES_KEY, JSON.stringify(nextScores));
+  } catch (error) {
+    console.error("Failed to save top scores:", error);
+  }
+
+  return nextScores;
+}
+
+function getRank(score) {
+  if (score >= 800) return "Ω";
+  if (score >= 760) return "Z";
+  if (score >= 720) return "X";
+  if (score >= 680) return "SSS";
+  if (score >= 640) return "SS";
+  if (score >= 600) return "S";
+  if (score >= 560) return "A+";
+  if (score >= 520) return "A";
+  if (score >= 480) return "A-";
+  if (score >= 465) return "B+";
+  if (score >= 450) return "B";
+  if (score >= 420) return "B-";
+  if (score >= 390) return "C+";
+  if (score >= 360) return "C";
+  if (score >= 330) return "C-";
+  if (score >= 290) return "D+";
+  if (score >= 250) return "D";
+  if (score >= 220) return "D-";
+  if (score >= 180) return "E+";
+  if (score >= 130) return "E";
+  return "E-";
+}
+
+function getNextRankInfo(score) {
+  const rankTable = [
+    { min: 800, rank: "Ω" },
+    { min: 760, rank: "Z" },
+    { min: 720, rank: "X" },
+    { min: 680, rank: "SSS" },
+    { min: 640, rank: "SS" },
+    { min: 600, rank: "S" },
+    { min: 560, rank: "A+" },
+    { min: 520, rank: "A" },
+    { min: 480, rank: "A-" },
+    { min: 465, rank: "B+" },
+    { min: 450, rank: "B" },
+    { min: 420, rank: "B-" },
+    { min: 390, rank: "C+" },
+    { min: 360, rank: "C" },
+    { min: 330, rank: "C-" },
+    { min: 290, rank: "D+" },
+    { min: 250, rank: "D" },
+    { min: 220, rank: "D-" },
+    { min: 180, rank: "E+" },
+    { min: 130, rank: "E" },
+    { min: 0, rank: "E-" },
+  ];
+
+  const currentIndex = rankTable.findIndex((item) => score >= item.min);
+  const current = rankTable[currentIndex];
+
+  if (currentIndex <= 0) {
+    return {
+      currentRank: current.rank,
+      nextRank: "MAX",
+      need: 0,
+    };
+  }
+
+  const next = rankTable[currentIndex - 1];
+
+  return {
+    currentRank: current.rank,
+    nextRank: next.rank,
+    need: next.min - score,
+  };
+}
+
 function getJudgement(reaction) {
-  if (reaction <= 150) {
-    return { label: "PERFECT", bonus: 80 };
-  }
-  if (reaction <= 250) {
-    return { label: "GREAT", bonus: 50 };
-  }
-  if (reaction <= 400) {
-    return { label: "GOOD", bonus: 25 };
-  }
+  if (reaction <= 400) return { label: "PERFECT", bonus: 4 };
+  if (reaction <= 550) return { label: "GREAT", bonus: 3 };
+  if (reaction <= 700) return { label: "GOOD", bonus: 2 };
   return { label: "SLOW", bonus: 0 };
 }
-function StatCard({ label, value, danger = false }) {
+
+function StatCard({ label, value, danger = false, hearts = false }) {
   return (
     <div className={`stat ${danger ? "danger" : ""}`}>
       <div className="stat-label">{label}</div>
-      <div className="stat-value">{value}</div>
+      <div className={`stat-value ${hearts ? "hearts" : ""}`}>{value}</div>
     </div>
   );
 }
+
 let audioCtx = null;
 
 function getAudioContext() {
+  if (typeof window === "undefined") return null;
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+
   if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx = new AudioContextClass();
   }
+
   return audioCtx;
 }
 
-function playTone({ frequency = 440, duration = 0.08, type = "sine", volume = 0.03, sweepTo = null }) {
+function playTone({
+  frequency = 440,
+  duration = 0.08,
+  type = "sine",
+  volume = 0.03,
+  sweepTo = null,
+}) {
   const ctx = getAudioContext();
+  if (!ctx) return;
 
   if (ctx.state === "suspended") {
-    ctx.resume();
+    ctx.resume().catch(() => {});
   }
 
   const osc = ctx.createOscillator();
@@ -81,16 +199,32 @@ function playTone({ frequency = 440, duration = 0.08, type = "sine", volume = 0.
 }
 
 function playSuccessSound() {
-  playTone({ frequency: 880, sweepTo: 1320, duration: 0.07, type: "triangle", volume: 0.035 });
+  playTone({
+    frequency: 880,
+    sweepTo: 1320,
+    duration: 0.07,
+    type: "triangle",
+    volume: 0.035,
+  });
 }
 
 function playMissSound() {
-  playTone({ frequency: 220, sweepTo: 140, duration: 0.12, type: "sawtooth", volume: 0.04 });
+  playTone({
+    frequency: 220,
+    sweepTo: 140,
+    duration: 0.12,
+    type: "sawtooth",
+    volume: 0.04,
+  });
 }
 
 function playStartSound() {
   const ctx = getAudioContext();
-  if (ctx.state === "suspended") ctx.resume();
+  if (!ctx) return;
+
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
 
   playTone({ frequency: 440, duration: 0.05, type: "sine", volume: 0.025 });
   setTimeout(() => playTone({ frequency: 660, duration: 0.06, type: "sine", volume: 0.025 }), 90);
@@ -99,10 +233,31 @@ function playStartSound() {
 
 function playGameOverSound() {
   const ctx = getAudioContext();
-  if (ctx.state === "suspended") ctx.resume();
+  if (!ctx) return;
 
-  playTone({ frequency: 420, sweepTo: 260, duration: 0.14, type: "square", volume: 0.035 });
-  setTimeout(() => playTone({ frequency: 260, sweepTo: 160, duration: 0.18, type: "square", volume: 0.03 }), 120);
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+
+  playTone({
+    frequency: 420,
+    sweepTo: 260,
+    duration: 0.14,
+    type: "square",
+    volume: 0.035,
+  });
+
+  setTimeout(
+    () =>
+      playTone({
+        frequency: 260,
+        sweepTo: 160,
+        duration: 0.18,
+        type: "square",
+        volume: 0.03,
+      }),
+    120
+  );
 }
 
 export default function App() {
@@ -110,7 +265,8 @@ export default function App() {
   const [countdown, setCountdown] = useState(3);
 
   const [score, setScore] = useState(0);
-  const [bestScore, setBestScore] = useState(0);
+  const [topScores, setTopScores] = useState([]);
+  const [resultSaved, setResultSaved] = useState(false);
   const [timeLeft, setTimeLeft] = useState(GAME_TIME);
   const [lives, setLives] = useState(STARTING_LIVES);
 
@@ -122,24 +278,48 @@ export default function App() {
   const [reactionStart, setReactionStart] = useState(0);
   const [totalReaction, setTotalReaction] = useState(0);
   const [successfulHits, setSuccessfulHits] = useState(0);
+  const [isFake, setIsFake] = useState(false);
 
   const [message, setMessage] = useState("SYSTEM IDLE");
   const [flashType, setFlashType] = useState(null);
 
   const roundTimeoutRef = useRef(null);
   const globalTimerRef = useRef(null);
+  const tickAudioRef = useRef(null);
 
   const avgReaction = successfulHits > 0 ? Math.round(totalReaction / successfulHits) : 0;
   const roundWindow = useMemo(() => getRoundWindow(correctCount), [correctCount]);
 
+  const actualRoundWindow = useMemo(() => {
+    return isFake ? Math.max(450, roundWindow - 250) : roundWindow;
+  }, [isFake, roundWindow]);
+
+  const nextRankInfo = getNextRankInfo(score);
+
   const clearAllTimers = () => {
-    if (roundTimeoutRef.current) clearTimeout(roundTimeoutRef.current);
-    if (globalTimerRef.current) clearInterval(globalTimerRef.current);
+    if (roundTimeoutRef.current) {
+      clearTimeout(roundTimeoutRef.current);
+      roundTimeoutRef.current = null;
+    }
+    if (globalTimerRef.current) {
+      clearInterval(globalTimerRef.current);
+      globalTimerRef.current = null;
+    }
+  };
+
+  const stopTickSound = () => {
+    if (tickAudioRef.current) {
+      tickAudioRef.current.pause();
+      tickAudioRef.current.currentTime = 0;
+    }
   };
 
   const spawnNextKey = (previous = "") => {
     const next = pickRandomKey(previous || currentKey);
+    const fake = Math.random() < FAKE_KEY_CHANCE;
+
     setCurrentKey(next);
+    setIsFake(fake);
     setReactionStart(Date.now());
   };
 
@@ -154,101 +334,143 @@ export default function App() {
     setSuccessfulHits(0);
     setMessage("PRESS THE KEY");
     setFlashType(null);
+    setResultSaved(false);
 
     const firstKey = pickRandomKey();
+    const firstFake = Math.random() < FAKE_KEY_CHANCE;
+
     setCurrentKey(firstKey);
+    setIsFake(firstFake);
     setReactionStart(Date.now());
     setScreen("playing");
   };
 
-const startGame = () => {
-  clearAllTimers();
-  playStartSound();
-  setCountdown(3);
-  setCurrentKey("");
-  setMessage("SYSTEM ARMED");
-  setFlashType(null);
-  setScreen("countdown");
-};
+  const startGame = () => {
+    clearAllTimers();
+    stopTickSound();
+    playStartSound();
+    setCountdown(3);
+    setCurrentKey("");
+    setIsFake(false);
+    setMessage("SYSTEM ARMED");
+    setFlashType(null);
+    setScreen("countdown");
+  };
 
-const endGame = () => {
-  clearAllTimers();
-  playGameOverSound();
-  setCurrentKey("");
-  setMessage("SYSTEM FAILURE");
-  setScreen("result");
-};
+  const endGame = () => {
+    clearAllTimers();
+    stopTickSound();
+    playGameOverSound();
+    setCurrentKey("");
+    setIsFake(false);
+    setMessage("SYSTEM FAILURE");
+    setScreen("result");
+  };
 
-const handleCorrect = () => {
-  const reaction = Date.now() - reactionStart;
-  const nextCombo = combo + 1;
+  const goToTitle = () => {
+    clearAllTimers();
+    stopTickSound();
+    setCurrentKey("");
+    setIsFake(false);
+    setMessage("SYSTEM IDLE");
+    setFlashType(null);
+    setScreen("title");
+  };
 
-  const judgement = getJudgement(reaction);
-  const gained = 100 + nextCombo * 10 + judgement.bonus;
+  const handleCorrect = () => {
+    const reaction = Date.now() - reactionStart;
+    const nextCombo = combo + 1;
+    const judgement = getJudgement(reaction);
+    const gained = 6 + Math.min(6, Math.floor(nextCombo / 2)) + judgement.bonus;
 
-  setScore((prev) => prev + gained);
-  setCombo(nextCombo);
-  setMaxCombo((prev) => Math.max(prev, nextCombo));
-  setCorrectCount((prev) => prev + 1);
-  setTotalReaction((prev) => prev + reaction);
-  setSuccessfulHits((prev) => prev + 1);
+    setScore((prev) => prev + gained);
+    setCombo(nextCombo);
+    setMaxCombo((prev) => Math.max(prev, nextCombo));
+    setCorrectCount((prev) => prev + 1);
+    setTotalReaction((prev) => prev + reaction);
+    setSuccessfulHits((prev) => prev + 1);
 
-  playSuccessSound();
-  setMessage(judgement.label);
-  setFlashType("success");
-  spawnNextKey(currentKey);
-};
+    playSuccessSound();
+    setMessage(judgement.label);
+    setFlashType("success");
+    spawnNextKey(currentKey);
+  };
 
-  setScore((prev) => prev + gained);
-  setCombo(nextCombo);
-  setMaxCombo((prev) => Math.max(prev, nextCombo));
-  setCorrectCount((prev) => prev + 1);
-  setTotalReaction((prev) => prev + reaction);
-  setSuccessfulHits((prev) => prev + 1);
+  const handleWrong = () => {
+    setScore((prev) => Math.max(0, prev - 6));
+    setCombo(0);
+    playMissSound();
+    setMessage("MISS");
+    setFlashType("miss");
+    spawnNextKey(currentKey);
+  };
 
-  playSuccessSound();
-  setMessage(speedBonus >= 35 ? "PERFECT" : "GOOD");
-  setFlashType("success");
-  spawnNextKey(currentKey);
-};
+  const handleFakeHit = () => {
+    setScore((prev) => Math.max(0, prev - FAKE_PENALTY));
+    setCombo(0);
+    playMissSound();
+    setMessage("TRAP");
+    setFlashType("miss");
+    spawnNextKey(currentKey);
+  };
 
-const handleWrong = () => {
-  setScore((prev) => Math.max(0, prev - 50));
-  setCombo(0);
-  playMissSound();
-  setMessage("MISS");
-  setFlashType("miss");
-  spawnNextKey(currentKey);
-};
-
-const handleTimeout = () => {
-  setCombo(0);
-  playMissSound();
-  setMessage("TOO SLOW");
-  setFlashType("miss");
-
-  setLives((prev) => {
-    const nextLives = prev - 1;
-    if (nextLives <= 0) {
-      setTimeout(() => endGame(), 0);
-    } else {
-      setTimeout(() => spawnNextKey(currentKey), 0);
+  const handleTimeout = () => {
+    if (isFake) {
+      setScore((prev) => prev + 6);
+      setMessage("GOOD IGNORE");
+      setFlashType("success");
+      setCombo(0);
+      spawnNextKey(currentKey);
+      return;
     }
-    return nextLives;
-  });
-};
+
+    setCombo(0);
+    playMissSound();
+    setMessage("TOO SLOW");
+    setFlashType("miss");
+
+    setLives((prev) => {
+      const nextLives = prev - 1;
+      if (nextLives <= 0) {
+        setTimeout(() => endGame(), 0);
+      } else {
+        setTimeout(() => spawnNextKey(currentKey), 0);
+      }
+      return nextLives;
+    });
+  };
 
   useEffect(() => {
-    const stored = localStorage.getItem(BEST_SCORE_KEY);
-    if (stored) setBestScore(Number(stored));
+    const audio = new Audio(clockTick);
+    audio.loop = true;
+    audio.volume = 0.35;
+    tickAudioRef.current = audio;
+
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+    };
   }, []);
 
   useEffect(() => {
-    if (screen === "result" && score > bestScore) {
-      setBestScore(score);
-      localStorage.setItem(BEST_SCORE_KEY, String(score));
+    try {
+      const storedScores = localStorage.getItem(TOP_SCORES_KEY);
+      if (!storedScores) return;
+
+      const parsedScores = JSON.parse(storedScores);
+      if (Array.isArray(parsedScores)) {
+        setTopScores(parsedScores);
+      }
+    } catch (error) {
+      console.error("Failed to load top scores:", error);
     }
-  }, [screen, score, bestScore]);
+  }, []);
+
+  useEffect(() => {
+    if (screen !== "result" || resultSaved) return;
+    setTopScores((prev) => updateTopScores(prev, score));
+    setResultSaved(true);
+  }, [screen, score, resultSaved]);
 
   useEffect(() => {
     if (screen !== "countdown") return;
@@ -273,27 +495,49 @@ const handleTimeout = () => {
     }, 1000);
 
     return () => {
-      if (globalTimerRef.current) clearInterval(globalTimerRef.current);
+      if (globalTimerRef.current) {
+        clearInterval(globalTimerRef.current);
+        globalTimerRef.current = null;
+      }
     };
   }, [screen]);
 
   useEffect(() => {
-    if (screen === "playing" && timeLeft <= 0) endGame();
+    if (screen === "playing" && timeLeft <= 0) {
+      endGame();
+    }
+  }, [screen, timeLeft]);
+
+  useEffect(() => {
+    const audio = tickAudioRef.current;
+    if (!audio) return;
+
+    if (screen === "playing" && timeLeft <= 10 && timeLeft > 0) {
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+      audio.currentTime = 0;
+    }
   }, [screen, timeLeft]);
 
   useEffect(() => {
     if (screen !== "playing" || !currentKey) return;
 
-    if (roundTimeoutRef.current) clearTimeout(roundTimeoutRef.current);
+    if (roundTimeoutRef.current) {
+      clearTimeout(roundTimeoutRef.current);
+    }
 
     roundTimeoutRef.current = setTimeout(() => {
       handleTimeout();
-    }, roundWindow);
+    }, actualRoundWindow);
 
     return () => {
-      if (roundTimeoutRef.current) clearTimeout(roundTimeoutRef.current);
+      if (roundTimeoutRef.current) {
+        clearTimeout(roundTimeoutRef.current);
+        roundTimeoutRef.current = null;
+      }
     };
-  }, [screen, currentKey, roundWindow]);
+  }, [screen, currentKey, actualRoundWindow, isFake]);
 
   useEffect(() => {
     if (!flashType) return;
@@ -306,23 +550,34 @@ const handleTimeout = () => {
 
     const onKeyDown = (e) => {
       if (e.repeat) return;
-      const pressed = e.key.toUpperCase();
 
+      const pressed = e.key.toUpperCase();
       if (pressed.length !== 1) return;
       if (!KEYS.includes(pressed)) return;
 
-      if (pressed === currentKey) handleCorrect();
-      else handleWrong();
+      if (pressed === currentKey) {
+        if (isFake) {
+          handleFakeHit();
+        } else {
+          handleCorrect();
+        }
+      } else {
+        handleWrong();
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [screen, currentKey, combo, reactionStart]);
+  }, [screen, currentKey, isFake, combo, reactionStart]);
 
   useEffect(() => {
-    return () => clearAllTimers();
+    return () => {
+      clearAllTimers();
+      stopTickSound();
+    };
   }, []);
 
+  const hpDisplay = "💛".repeat(lives) + "🖤".repeat(STARTING_LIVES - lives);
   const isDanger = timeLeft <= 10 || lives === 1;
 
   return (
@@ -347,17 +602,47 @@ const handleTimeout = () => {
                 <h2 className="hero2">OR DIE</h2>
 
                 <p className="desc">
-                  画面中央に表示されたキーを、制限時間内に素早く押し続けろ。
-                  遅ければライフを失い、時間が尽きればシステムは崩壊する。
+                  表示されたキーをすばやく押し続けろ。
+                  たまに出現するフェイクキーは押してはいけない
                 </p>
 
                 <div className="stats3">
                   <StatCard label="Game Time" value={`${GAME_TIME}s`} />
-                  <StatCard label="Lives" value={STARTING_LIVES} />
-                  <StatCard label="Best Score" value={bestScore} />
+                  <StatCard label="HP" value={"💛💛💛"} hearts />
+
+                  <div className="stat stat-topscore">
+                    <div className="stat-label">Top Score</div>
+
+                    {topScores.length > 0 ? (
+                      <div className="topscore-inner">
+                        <div className="topscore-best">
+                          <span className="topscore-best-score">{topScores[0].score}</span>
+                          <span className="topscore-best-rank">{getRank(topScores[0].score)}</span>
+                        </div>
+
+                        <div className="topscore-list">
+                          {topScores.map((item, index) => (
+                            <div
+                              className="topscore-line"
+                              key={`${item.playedAt}-${item.score}-${index}`}
+                            >
+                              <span className="topscore-rank">{formatRank(index)}</span>
+                              <span className="topscore-text">
+                                {formatDateTime(item.playedAt)} : {item.score}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="topscore-empty">No records yet</div>
+                    )}
+                  </div>
                 </div>
 
-                <button className="start-btn" onClick={startGame}>Start</button>
+                <button className="start-btn" onClick={startGame}>
+                  Start
+                </button>
               </div>
             </div>
           )}
@@ -372,19 +657,34 @@ const handleTimeout = () => {
             <>
               <section className="stats-top">
                 <StatCard label="Score" value={score} />
-                <StatCard label="Time" value={timeLeft} danger={timeLeft <= 10 && screen === "playing"} />
-                <StatCard label="Lives" value={lives} danger={lives === 1 && screen === "playing"} />
+                <StatCard
+                  label="Time"
+                  value={timeLeft}
+                  danger={timeLeft <= 10 && screen === "playing"}
+                />
+                <StatCard
+                  label="HP"
+                  value={hpDisplay}
+                  hearts
+                  danger={lives === 1 && screen === "playing"}
+                />
               </section>
 
               <section className="game-grid">
                 <div className="arena">
-                  <div className={`arena-inner ${isDanger && screen === "playing" ? "danger" : ""}`} />
+                  <div
+                    className={`arena-inner ${
+                      isDanger && screen === "playing" ? "danger" : ""
+                    }`}
+                  />
 
                   <div className="target-wrap">
                     <div className="target-label">Target Key</div>
 
                     {screen === "playing" ? (
-                      <div className="key-box">{currentKey}</div>
+                      <div className={`key-box ${isFake ? "fake" : ""}`}>
+                        {currentKey}
+                      </div>
                     ) : (
                       <div className="rank-box">{getRank(score)}</div>
                     )}
@@ -396,13 +696,15 @@ const handleTimeout = () => {
                     {screen === "playing" && (
                       <div className="window-wrap">
                         <div className="window-head">
-                          <span>Reaction Window</span>
-                          <span>{(roundWindow / 1000).toFixed(1)}s</span>
+                          <span>入力制限時間</span>
+                          <span>{(actualRoundWindow / 1000).toFixed(1)}s</span>
                         </div>
                         <div className="window-bar">
                           <div
-                            className={`window-fill ${roundWindow <= 1400 ? "danger" : ""}`}
-                            style={{ width: `${(roundWindow / 2000) * 100}%` }}
+                            className={`window-fill ${
+                              actualRoundWindow <= 1400 ? "danger" : ""
+                            }`}
+                            style={{ width: `${(actualRoundWindow / 2000) * 100}%` }}
                           />
                         </div>
                       </div>
@@ -413,30 +715,69 @@ const handleTimeout = () => {
                 <div className="side">
                   <div className="side-card">
                     <div className="side-title">Combat Feed</div>
-                    <div className="feed-row"><span>Combo</span><span className="feed-strong feed-red">{combo}</span></div>
-                    <div className="feed-row"><span>Max Combo</span><span className="feed-strong">{maxCombo}</span></div>
-                    <div className="feed-row"><span>Avg Reaction</span><span className="feed-strong">{avgReaction ? `${avgReaction} ms` : "--"}</span></div>
-                    <div className="feed-row"><span>Difficulty</span><span className="feed-strong">{correctCount}</span></div>
+                    <div className="feed-row">
+                      <span>Combo</span>
+                      <span className="feed-strong feed-red">{combo}</span>
+                    </div>
+                    <div className="feed-row">
+                      <span>Max Combo</span>
+                      <span className="feed-strong">{maxCombo}</span>
+                    </div>
+                    <div className="feed-row">
+                      <span>Avg Reaction</span>
+                      <span className="feed-strong">
+                        {avgReaction ? `${avgReaction} ms` : "--"}
+                      </span>
+                    </div>
+                    <div className="feed-row">
+                      <span>Hit</span>
+                      <span className="feed-strong">{correctCount}</span>
+                    </div>
                   </div>
 
-                  <div className="side-card">
-                    <div className="side-title">How to Survive</div>
-                    <ul className="help-list">
-                      <li>中央のキーを押す</li>
-                      <li>速いほど高評価・高得点</li>
-                      <li>間違えると減点</li>
-                      <li>遅すぎるとライフ減少</li>
-                      <li>後半ほど制限時間が短くなる</li>
-                    </ul>
-                  </div>
+                  {screen === "playing" && (
+                    <div className="side-card">
+                      <div className="side-title">Next Rank</div>
+                      <div className="feed-row">
+                        <span>Current</span>
+                        <span className="feed-strong">{nextRankInfo.currentRank}</span>
+                      </div>
+                      <div className="feed-row">
+                        <span>Next</span>
+                        <span className="feed-strong feed-red">{nextRankInfo.nextRank}</span>
+                      </div>
+                      <div className="feed-row">
+                        <span>Need</span>
+                        <span className="feed-strong">
+                          {nextRankInfo.need === 0 ? "CLEAR" : `${nextRankInfo.need} pts`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {screen === "result" && (
                     <div className="side-card">
                       <div className="side-title">System Report</div>
-                      <div className="feed-row"><span>Final Score</span><span className="feed-strong">{score}</span></div>
-                      <div className="feed-row"><span>Rank</span><span className="feed-strong feed-red">{getRank(score)}</span></div>
-                      <div className="feed-row"><span>Best Score</span><span className="feed-strong">{bestScore}</span></div>
-                      <button className="retry-btn" onClick={startGame}>Retry</button>
+                      <div className="feed-row">
+                        <span>Final Score</span>
+                        <span className="feed-strong">{score}</span>
+                      </div>
+                      <div className="feed-row">
+                        <span>Rank</span>
+                        <span className="feed-strong feed-red">{getRank(score)}</span>
+                      </div>
+                      <div className="feed-row">
+                        <span>Top Score</span>
+                        <span className="feed-strong">{topScores[0]?.score ?? 0}</span>
+                      </div>
+                      <div className="result-buttons">
+                        <button className="retry-btn" onClick={startGame}>
+                          Retry
+                        </button>
+                        <button className="title-btn" onClick={goToTitle}>
+                          Title
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

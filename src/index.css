@@ -937,29 +937,47 @@ button {
   line-height: 1;
 }
 
-.vs-gauge-bar {
+.vs-gauge-wrap {
   width: 100%;
   max-width: 400px;
-  height: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vs-gauge-bg {
+  width: 100%;
+  height: 12px;
   background: rgba(0, 0, 0, 0.6);
-  border-radius: 4px;
-  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
   position: relative;
-  margin-top: 4px;
+  overflow: hidden;
 }
 
 .vs-gauge-fill {
   height: 100%;
-  transition: width 0.2s linear;
+  transition: width 0.2s linear, background-color 0.3s;
+  box-shadow: 0 0 10px inset rgba(255, 255, 255, 0.2);
 }
 
-.vs-gauge-text {
+.vs-gauge-fill.enemy {
+  float: right;
+}
+
+.gauge-marker {
   position: absolute;
-  right: 4px;
-  top: -2px;
-  font-size: 8px;
-  color: rgba(255, 255, 255, 0.6);
-  pointer-events: none;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.4);
+  z-index: 5;
+}
+
+.vs-gauge-label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
 }
 
 .vs-opponent .vs-hp-bar {
@@ -1131,7 +1149,13 @@ button {
   }
 }
 
-.gauge-fill.tier-1 { background: #3b82f6; } /* Pulse */
-.gauge-fill.tier-2 { background: #eab308; } /* Break */
-.gauge-fill.tier-3 { background: #a855f7; } /* Jam */
-.gauge-fill.tier-4 { background: #ef4444; } /* Overdrive */
+.vs-gauge-fill.tier-0 { background: #4b5563; }
+.vs-gauge-fill.tier-1 { background: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.6); animation: pulseGlow 1.5s infinite alternate; }
+.vs-gauge-fill.tier-2 { background: #eab308; box-shadow: 0 0 15px rgba(234, 179, 8, 0.6); animation: pulseGlow 1.2s infinite alternate; }
+.vs-gauge-fill.tier-3 { background: #a855f7; box-shadow: 0 0 20px rgba(168, 85, 247, 0.7); animation: pulseGlow 0.8s infinite alternate; }
+.vs-gauge-fill.tier-4 { background: #ef4444; box-shadow: 0 0 25px rgba(239, 68, 68, 0.8); animation: pulseGlow 0.4s infinite alternate; }
+
+@keyframes pulseGlow {
+  0% { filter: brightness(1); }
+  100% { filter: brightness(1.4); }
+}

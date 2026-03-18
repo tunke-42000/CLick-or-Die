@@ -300,7 +300,7 @@ export default function App() {
   const [resultSaved, setResultSaved] = useState(false);
   const [timeLeft, setTimeLeft] = useState(GAME_TIME);
   const [lives, setLives] = useState(STARTING_LIVES);
-  const [battleHp, setBattleHp] = useState(100);
+  const [battleHp, setBattleHp] = useState(60);
   const [attackGauge, setAttackGauge] = useState(0);
 
   const [gameMode, setGameMode] = useState("single");
@@ -510,7 +510,7 @@ export default function App() {
               setTimeLeft(GAME_TIME);
               timeLeftRef.current = GAME_TIME;
               setLives(STARTING_LIVES);
-              setBattleHp(100);
+              setBattleHp(60);
               setAttackGauge(0);
               setCombo(0);
               setMaxCombo(0);
@@ -605,7 +605,7 @@ export default function App() {
     setTimeLeft(GAME_TIME);
     timeLeftRef.current = GAME_TIME;
     setLives(STARTING_LIVES);
-    setBattleHp(100);
+    setBattleHp(60);
     setAttackGauge(0);
     setCombo(0);
     setMaxCombo(0);
@@ -1279,23 +1279,39 @@ export default function App() {
               {gameMode === "multi" ? (
                 <section className="vs-header">
                   {(() => {
-                    const eHp = opponentData?.battleHp ?? 100;
+                    const eHp = opponentData?.battleHp ?? 60;
+                    const eGauge = opponentData?.attackGauge ?? 0;
                     let leadStatus = "EVEN";
                     let leadClass = "even";
                     if (battleHp > eHp) { leadStatus = "LEADING"; leadClass = "leading"; }
                     else if (battleHp < eHp) { leadStatus = "LOSING"; leadClass = "losing"; }
                     
+                    const getNextAttackInfo = (gauge) => {
+                      if (gauge >= 100) return { name: "OVERDRIVE", color: "#f87171" };
+                      if (gauge >= 75) return { name: "JAM", color: "#d8b4fe" };
+                      if (gauge >= 50) return { name: "BREAK", color: "#fcd34d" };
+                      if (gauge >= 25) return { name: "PULSE", color: "#93c5fd" };
+                      return { name: "CHARGING", color: "#9ca3af" };
+                    };
+                    const myAttackInfo = getNextAttackInfo(attackGauge);
+                    const enemyAttackInfo = getNextAttackInfo(eGauge);
+
                     return (
                       <>
                         <div className="vs-player">
                           <div className="vs-name">YOU</div>
                           <div className="vs-hp-bar">
-                            <div className="vs-hp-fill" style={{ width: `${Math.max(0, Math.min(100, battleHp))}%`, background: battleHp <= 20 ? "#ef4444" : "#22c55e" }} />
+                            <div className="vs-hp-fill" style={{ width: `${Math.max(0, Math.min(100, (battleHp/60)*100))}%`, background: battleHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, battleHp)}</div>
-                          <div className="vs-gauge-bar">
-                            <div className={`vs-gauge-fill tier-${Math.floor(attackGauge/25)}`} style={{ width: `${Math.max(0, Math.min(100, attackGauge))}%` }} />
-                            <div className="vs-gauge-text">[SPACE] TO ATTACK</div>
+                          <div className="vs-gauge-wrap">
+                            <div className="vs-gauge-bg">
+                              <div className={`vs-gauge-fill tier-${Math.floor(attackGauge/25)}`} style={{ width: `${Math.max(0, Math.min(100, attackGauge))}%` }} />
+                              <div className="gauge-marker" style={{ left: "25%" }} />
+                              <div className="gauge-marker" style={{ left: "50%" }} />
+                              <div className="gauge-marker" style={{ left: "75%" }} />
+                            </div>
+                            <div className="vs-gauge-label" style={{ color: myAttackInfo.color, textShadow: attackGauge >= 25 ? `0 0 10px ${myAttackInfo.color}` : "none" }}>NEXT: {myAttackInfo.name}</div>
                           </div>
                         </div>
                         
@@ -1309,9 +1325,18 @@ export default function App() {
                             {opponentStatus === "disconnected" ? "ENEMY (OFFLINE)" : "ENEMY"}
                           </div>
                           <div className="vs-hp-bar">
-                            <div className="vs-hp-fill enemy" style={{ width: `${Math.max(0, Math.min(100, eHp))}%`, background: eHp <= 20 ? "#ef4444" : "#22c55e" }} />
+                            <div className="vs-hp-fill enemy" style={{ width: `${Math.max(0, Math.min(100, (eHp/60)*100))}%`, background: eHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, eHp)}</div>
+                          <div className="vs-gauge-wrap" style={{ alignItems: "flex-end" }}>
+                            <div className="vs-gauge-bg">
+                              <div className={`vs-gauge-fill tier-${Math.floor(eGauge/25)} enemy`} style={{ width: `${Math.max(0, Math.min(100, eGauge))}%` }} />
+                              <div className="gauge-marker" style={{ right: "25%" }} />
+                              <div className="gauge-marker" style={{ right: "50%" }} />
+                              <div className="gauge-marker" style={{ right: "75%" }} />
+                            </div>
+                            <div className="vs-gauge-label" style={{ color: enemyAttackInfo.color, textShadow: eGauge >= 25 ? `0 0 10px ${enemyAttackInfo.color}` : "none" }}>NEXT: {enemyAttackInfo.name}</div>
+                          </div>
                         </div>
                       </>
                     );
@@ -1521,7 +1546,7 @@ export default function App() {
                       <div className="feed-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "4px", paddingBottom: "12px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", width: "100%", fontSize: "14px" }}>
                           <span>Battle HP</span>
-                          <span className="feed-strong">{Math.max(0, opponentData.battleHp ?? 100)}</span>
+                          <span className="feed-strong">{Math.max(0, opponentData.battleHp ?? 60)}</span>
                         </div>
                       </div>
 

@@ -322,6 +322,18 @@ export default function App() {
   const [lastDamageTaken, setLastDamageTaken] = useState(null);
   const [enemyHitAnim, setEnemyHitAnim] = useState(false);
 
+  // New states for visual clarity
+  const [battleLog, setBattleLog] = useState([]);
+  const [centralNotice, setCentralNotice] = useState(null);
+
+  const addLog = (text, type = "info") => {
+    setBattleLog((prev) => {
+      const next = [...prev, { id: Date.now() + Math.random(), text, type }];
+      if (next.length > 5) return next.slice(next.length - 5);
+      return next;
+    });
+  };
+
   useEffect(() => {
     signInAnonymously(auth)
       .then((cred) => setMyUid(cred.user.uid))
@@ -381,6 +393,8 @@ export default function App() {
         setMessage({ text: "UNDER ATTACK: PULSE -6", type: "bad", id: Date.now() });
         setFlashType("trap");
         setLastDamageTaken("PULSE SHOT");
+        setCentralNotice({ text: "PULSE SHOT HIT -6", type: "damage", subtext: "Enemy attacked!" });
+        addLog("Took 6 DMG from PULSE SHOT", "damage");
         break;
       case "break":
         setBattleHp(s => Math.max(0, s - 10));
@@ -389,6 +403,8 @@ export default function App() {
         setFlashType("trap");
         setGlitchAnim((prev) => prev + 1);
         setLastDamageTaken("BREAK SHOT");
+        setCentralNotice({ text: "BREAK SHOT HIT -10", type: "damage", subtext: "Enemy heavily attacked!" });
+        addLog("Took 10 DMG from BREAK SHOT", "damage");
         break;
       case "timeJam":
       case "jam":
@@ -397,12 +413,16 @@ export default function App() {
         setMessage({ text: "SYSTEM JAMMED!", type: "bad", id: Date.now() });
         setFlashType("trap");
         setLastDamageTaken("JAM ATTACK");
+        setCentralNotice({ text: "JAM ATTACK HIT -8", type: "damage", subtext: "Input speed penalized!" });
+        addLog("Took 8 DMG from JAM", "damage");
         break;
       case "fakeBoost":
         fakeBoostChargesRef.current += 3;
         setMessage({ text: "UNDER ATTACK: FAKE BOOST!", type: "bad", id: Date.now() });
         setFlashType("trap");
         setLastDamageTaken("FAKE BOOST");
+        setCentralNotice({ text: "FAKE BOOST APPLIED", type: "damage", subtext: "Fake keys increased!" });
+        addLog("Enemy boosted Fake Keys", "damage");
         break;
       case "overdrive":
         setBattleHp(s => Math.max(0, s - 16));
@@ -412,6 +432,8 @@ export default function App() {
         setGlitchAnim(2);
         playTone({ frequency: 150, sweepTo: 50, duration: 0.8, type: "sawtooth", volume: 0.1 });
         setLastDamageTaken("OVERDRIVE");
+        setCentralNotice({ text: "OVERDRIVE HIT -16", type: "critical", subtext: "Critical Damage!" });
+        addLog("Took 16 DMG from OVERDRIVE", "critical");
         break;
       default: break;
     }
@@ -499,6 +521,8 @@ export default function App() {
               fakeBoostChargesRef.current = 0;
               setLastAttackSent(null);
               setLastDamageTaken(null);
+              setBattleLog([]);
+              setCentralNotice(null);
 
               setTimeout(() => {
                 startGame();
@@ -592,6 +616,8 @@ export default function App() {
     setFlashType(null);
     setComboMsg(null);
     setResultSaved(false);
+    setBattleLog([]);
+    setCentralNotice(null);
 
     const firstKey = pickRandomKey();
     const firstFake = Math.random() < FAKE_KEY_CHANCE;
@@ -636,6 +662,11 @@ export default function App() {
     setScreen("title");
   };
 
+  const clearTopScores = () => {
+    localStorage.removeItem(TOP_SCORES_KEY);
+    setTopScores([]);
+  };
+
   const sendAttack = (type, msg) => {
     if (gameMode !== "multi" || !myRoomId || !opponentUid) return;
     
@@ -647,7 +678,12 @@ export default function App() {
     }).catch(() => {});
 
     setMessage({ text: msg, type: "good", id: Date.now() });
-    setLastAttackSent(msg.split(": ")[1]);
+    
+    const attackName = msg.split(": ")[1] || type.toUpperCase();
+    setLastAttackSent(attackName);
+    
+    setCentralNotice({ text: attackName, type: "attack", subtext: "Attack Success!" });
+    addLog(`You hit ${attackName}`, "attack");
     
     setEnemyHitAnim(true);
     setTimeout(() => setEnemyHitAnim(false), 500);
@@ -1025,6 +1061,12 @@ export default function App() {
   }, [comboMsg]);
 
   useEffect(() => {
+    if (!centralNotice) return;
+    const id = setTimeout(() => setCentralNotice(null), 2000);
+    return () => clearTimeout(id);
+  }, [centralNotice]);
+
+  useEffect(() => {
     if (screen !== "playing") return;
 
     const onKeyDown = (e) => {
@@ -1113,9 +1155,26 @@ export default function App() {
                   たまに出現するフェイクキーは押してはいけない
                 </p>
 
-                <div className="stats3">
-                  <StatCard label="Game Time" value={`${GAME_TIME}s`} />
-                  <StatCard label="HP" value={"💛💛💛💛💛"} hearts />
+                <div className="title-actions" style={{ display: "flex", flexWrap: "wrap", gap: "16px", justifyContent: "center", marginTop: "40px" }}>
+                  <button className="start-btn" onClick={() => { setGameMode("single"); setScreen("single_prep"); }}>
+                    Single Play
+                  </button>
+                  <button className="start-btn multi-btn" onClick={() => { setGameMode("multi"); setScreen("room_input"); }} style={{ background: "#9333ea", borderColor: "#a855f7" }}>
+                    Online Battle
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {screen === "single_prep" && (
+            <div className="center-screen">
+              <div className="panel">
+                <div className="warning">Mission Details</div>
+                <h2 className="hero2" style={{ fontSize: "36px", marginBottom: "24px" }}>SINGLE PLAY</h2>
+
+                <div className="stats2">
+                  <StatCard label="Time" value={`${GAME_TIME}s`} />
 
                   <div className="stat stat-topscore">
                     <div className="stat-label">Top Score</div>
@@ -1140,6 +1199,13 @@ export default function App() {
                             </div>
                           ))}
                         </div>
+                        <button 
+                          className="title-btn" 
+                          style={{ fontSize: 12, padding: "4px 8px", marginTop: "12px", width: "100%", opacity: 0.8 }} 
+                          onClick={clearTopScores}
+                        >
+                          RESET RECORDS
+                        </button>
                       </div>
                     ) : (
                       <div className="topscore-empty">No records yet</div>
@@ -1147,12 +1213,12 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="title-actions" style={{ display: "flex", gap: "16px", justifyContent: "center" }}>
-                  <button className="start-btn" onClick={() => { setGameMode("single"); startGame(); }}>
-                    Single Play
+                <div className="title-actions" style={{ display: "flex", gap: "16px", justifyContent: "center", marginTop: "24px" }}>
+                  <button className="start-btn" onClick={() => startGame()}>
+                    Start Mission
                   </button>
-                  <button className="start-btn multi-btn" onClick={() => setScreen("room_input")} style={{ background: "#9333ea", borderColor: "#a855f7" }}>
-                    Online Battle
+                  <button className="title-btn" onClick={goToTitle}>
+                    Back
                   </button>
                 </div>
               </div>
@@ -1210,43 +1276,63 @@ export default function App() {
 
           {(screen === "playing" || screen === "result") && (
             <>
-              <section className="stats-top">
-                <StatCard label="Score" value={score} />
-                <StatCard
-                  label="Time"
-                  value={timeLeft}
-                  danger={timeLeft <= 10 && screen === "playing"}
-                />
-                
-                {gameMode === "multi" ? (
-                  <div className="multi-hud" style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%", maxWidth: "300px" }}>
-                    <div className="hud-bar-wrap" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <div className="hud-label" style={{ fontSize: "14px", color: "#9ca3af", display: "flex", justifyContent: "space-between", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                        Battle HP <span><span style={{color: "white", fontWeight: "bold"}}>{battleHp}</span>/100</span>
-                      </div>
-                      <div className="hud-track" style={{ height: "12px", background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", overflow: "hidden" }}>
-                        <div className="hud-fill" style={{ height: "100%", width: `${Math.max(0, Math.min(100, battleHp))}%`, background: battleHp <= 20 ? "#ef4444" : "#22c55e", transition: "width 0.2s ease-out, background 0.2s" }} />
-                      </div>
-                    </div>
-                    <div className="hud-bar-wrap" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <div className="hud-label" style={{ fontSize: "14px", color: "#9ca3af", display: "flex", justifyContent: "space-between", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                        Attack Gauge <span><span style={{color: "white", fontWeight: "bold"}}>{attackGauge}</span>/100</span>
-                      </div>
-                      <div className="hud-track" style={{ height: "12px", background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", overflow: "hidden" }}>
-                        <div className={`hud-fill gauge-fill tier-${Math.floor(attackGauge/25)}`} style={{ height: "100%", width: `${Math.max(0, Math.min(100, attackGauge))}%`, transition: "width 0.2s ease-out" }} />
-                        <div style={{ position: "absolute", right: 0, top: -20, fontSize: 10, color: "#9ca3af" }}>[SPACE] TO ATTACK</div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
+              {gameMode === "multi" ? (
+                <section className="vs-header">
+                  {(() => {
+                    const eHp = opponentData?.battleHp ?? 100;
+                    let leadStatus = "EVEN";
+                    let leadClass = "even";
+                    if (battleHp > eHp) { leadStatus = "LEADING"; leadClass = "leading"; }
+                    else if (battleHp < eHp) { leadStatus = "LOSING"; leadClass = "losing"; }
+                    
+                    return (
+                      <>
+                        <div className="vs-player">
+                          <div className="vs-name">YOU</div>
+                          <div className="vs-hp-bar">
+                            <div className="vs-hp-fill" style={{ width: `${Math.max(0, Math.min(100, battleHp))}%`, background: battleHp <= 20 ? "#ef4444" : "#22c55e" }} />
+                          </div>
+                          <div className="vs-hp-val">{Math.max(0, battleHp)}</div>
+                          <div className="vs-gauge-bar">
+                            <div className={`vs-gauge-fill tier-${Math.floor(attackGauge/25)}`} style={{ width: `${Math.max(0, Math.min(100, attackGauge))}%` }} />
+                            <div className="vs-gauge-text">[SPACE] TO ATTACK</div>
+                          </div>
+                        </div>
+                        
+                        <div className="vs-center">
+                          <div className={`vs-time ${timeLeft <= 10 && screen === "playing" ? "danger" : ""}`}>{timeLeft}</div>
+                          <div className={`vs-lead-status ${leadClass}`}>{leadStatus}</div>
+                        </div>
+
+                        <div className="vs-opponent">
+                          <div className="vs-name" style={{ color: opponentStatus === "disconnected" ? "#9ca3af" : "#f87171" }}>
+                            {opponentStatus === "disconnected" ? "ENEMY (OFFLINE)" : "ENEMY"}
+                          </div>
+                          <div className="vs-hp-bar">
+                            <div className="vs-hp-fill enemy" style={{ width: `${Math.max(0, Math.min(100, eHp))}%`, background: eHp <= 20 ? "#ef4444" : "#22c55e" }} />
+                          </div>
+                          <div className="vs-hp-val">{Math.max(0, eHp)}</div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </section>
+              ) : (
+                <section className="stats-top">
+                  <StatCard label="Score" value={score} />
+                  <StatCard
+                    label="Time"
+                    value={timeLeft}
+                    danger={timeLeft <= 10 && screen === "playing"}
+                  />
                   <StatCard
                     label="HP"
                     value={hpDisplay}
                     hearts
                     danger={lives === 1 && screen === "playing"}
                   />
-                )}
-              </section>
+                </section>
+              )}
 
               <section className="game-grid">
                 <div className="arena">
@@ -1255,6 +1341,12 @@ export default function App() {
                   />
 
                   <div className="target-wrap">
+                    {centralNotice && screen === "playing" && (
+                      <div key={centralNotice.id} className={`central-notice ${centralNotice.type}`}>
+                        <div className="central-notice-text">{centralNotice.text}</div>
+                        {centralNotice.subtext && <div className="central-notice-sub">{centralNotice.subtext}</div>}
+                      </div>
+                    )}
                     <div className="target-label">Target Key</div>
 
                     {comboMsg && screen === "playing" && (
@@ -1287,14 +1379,41 @@ export default function App() {
                       <div className="key-box-wrapper">
                         {gameMode === "multi" ? (
                           <>
-                            <div className="rank-box" style={{ fontSize: "36px", color: opponentStatus === "disconnected" ? "#93c5fd" : battleHp <= 0 ? "#ef4444" : (opponentData?.battleHp || 0) <= 0 ? "#fcd34d" : battleHp > (opponentData?.battleHp || 0) ? "#fcd34d" : battleHp < (opponentData?.battleHp || 0) ? "#ef4444" : score > (opponentData?.score || 0) ? "#fcd34d" : score < (opponentData?.score || 0) ? "#ef4444" : "#d1d5db" }}>
-                              {opponentStatus === "disconnected" ? "WIN (DISCONNECT)" : 
-                               battleHp <= 0 ? "YOU LOSE (K.O.)" : 
-                               (opponentData?.battleHp || 0) <= 0 ? "YOU WIN (K.O.)" : 
-                               battleHp > (opponentData?.battleHp || 0) ? "YOU WIN (HP)" :
-                               battleHp < (opponentData?.battleHp || 0) ? "YOU LOSE (HP)" :
-                               score > (opponentData?.score || 0) ? "YOU WIN (SCORE)" : 
-                               score < (opponentData?.score || 0) ? "YOU LOSE (SCORE)" : "DRAW"}
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
+                              {(() => {
+                                let title = "";
+                                let titleColor = "#d1d5db";
+                                let reason = "";
+                                const eHp = opponentData?.battleHp || 0;
+                                const eScore = opponentData?.score || 0;
+
+                                if (opponentStatus === "disconnected") {
+                                  title = "WIN"; titleColor = "#93c5fd"; reason = "Enemy disconnected";
+                                } else if (battleHp <= 0) {
+                                  title = "LOSE"; titleColor = "#ef4444"; reason = "Your Battle HP depleted";
+                                } else if (eHp <= 0) {
+                                  title = "WIN"; titleColor = "#fcd34d"; reason = "Enemy Battle HP depleted";
+                                } else if (battleHp > eHp) {
+                                  title = "WIN"; titleColor = "#fcd34d"; reason = "Higher HP at Time Up";
+                                } else if (battleHp < eHp) {
+                                  title = "LOSE"; titleColor = "#ef4444"; reason = "Lower HP at Time Up";
+                                } else if (score > eScore) {
+                                  title = "WIN"; titleColor = "#fcd34d"; reason = "Higher Score (HP was exact)";
+                                } else if (score < eScore) {
+                                  title = "LOSE"; titleColor = "#ef4444"; reason = "Lower Score (HP was exact)";
+                                } else {
+                                  title = "DRAW"; reason = "Same HP and Score";
+                                }
+
+                                return (
+                                  <>
+                                    <div className="rank-box" style={{ fontSize: "48px", color: titleColor, width: "auto", height: "auto", padding: "24px 48px", borderColor: titleColor, boxShadow: `0 0 30px ${titleColor}40` }}>
+                                      {title}
+                                    </div>
+                                    <div style={{ fontSize: "16px", color: "#fca5a5", letterSpacing: "0.1em", textTransform: "uppercase" }}>{reason}</div>
+                                  </>
+                                );
+                              })()}
                             </div>
                             <div className="multi-score-compare" style={{ display: "flex", gap: "32px", justifyContent: "center", marginTop: "16px" }}>
                               <div style={{ textAlign: "center" }}>
@@ -1336,6 +1455,16 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                  
+                  {gameMode === "multi" && screen === "playing" && (
+                    <div className="battle-log-container">
+                      {battleLog.map((log) => (
+                        <div key={log.id} className={`log-entry log-${log.type}`}>
+                          {log.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="side">
@@ -1393,16 +1522,6 @@ export default function App() {
                         <div style={{ display: "flex", justifyContent: "space-between", width: "100%", fontSize: "14px" }}>
                           <span>Battle HP</span>
                           <span className="feed-strong">{Math.max(0, opponentData.battleHp ?? 100)}</span>
-                        </div>
-                        <div className="window-bar" style={{ height: "10px", marginTop: 0 }}>
-                          <div 
-                            className={`window-fill ${(opponentData.battleHp ?? 100) <= 20 ? "danger" : ""}`}
-                            style={{ 
-                              width: `${(Math.max(0, opponentData.battleHp ?? 100) / 100) * 100}%`,
-                              background: (opponentData.battleHp ?? 100) <= 20 ? "red" : "#22c55e",
-                              transition: "width 0.3s ease-out, background 0.3s"
-                            }} 
-                          />
                         </div>
                       </div>
 

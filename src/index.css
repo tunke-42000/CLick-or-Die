@@ -204,6 +204,14 @@ button {
   align-items: stretch;
 }
 
+.stats2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+  align-items: stretch;
+}
+
 .stats-top {
   display: grid;
   gap: 16px;
@@ -726,6 +734,7 @@ button {
 
 @media (max-width: 900px) {
   .stats3,
+  .stats2,
   .stats-top,
   .game-grid {
     grid-template-columns: 1fr;
@@ -869,6 +878,259 @@ button {
 }
 
 .gauge-fill { background: #d1d5db; }
+
+/* --- Visual Clarity Upgrades --- */
+
+.vs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 16px 24px;
+}
+
+.vs-player, .vs-opponent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vs-opponent {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.vs-name {
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: #9ca3af;
+  font-weight: 700;
+}
+
+.vs-hp-bar {
+  width: 100%;
+  max-width: 400px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.vs-hp-fill {
+  height: 100%;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s;
+}
+
+.vs-hp-fill.enemy {
+  float: right;
+}
+
+.vs-hp-val {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.vs-gauge-bar {
+  width: 100%;
+  max-width: 400px;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  margin-top: 4px;
+}
+
+.vs-gauge-fill {
+  height: 100%;
+  transition: width 0.2s linear;
+}
+
+.vs-gauge-text {
+  position: absolute;
+  right: 4px;
+  top: -2px;
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+}
+
+.vs-opponent .vs-hp-bar {
+  margin-left: auto;
+}
+
+.vs-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 32px;
+  min-width: 140px;
+}
+
+.vs-time {
+  font-size: 42px;
+  font-weight: 900;
+  color: white;
+  line-height: 1;
+}
+
+.vs-time.danger {
+  color: #ef4444;
+  animation: txtShake 0.4s infinite;
+}
+
+.vs-lead-status {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  margin-top: 8px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.vs-lead-status.leading {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+
+.vs-lead-status.losing {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+
+.vs-lead-status.even {
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.4);
+}
+
+.central-notice {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 50;
+  pointer-events: none;
+  animation: noticePop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, noticeFade 0.3s 1.7s forwards;
+  text-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+
+.central-notice-text {
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.central-notice-sub {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+.central-notice.attack {
+  color: #fcd34d;
+  text-shadow: 0 0 30px rgba(252, 211, 77, 0.8), 0 0 10px rgba(252, 211, 77, 0.4);
+}
+
+.central-notice.damage {
+  color: #ef4444;
+  text-shadow: 0 0 30px rgba(239, 68, 68, 0.8), 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+.central-notice.critical {
+  color: #d8b4fe;
+  text-shadow: 0 0 30px rgba(216, 180, 254, 0.8), 0 0 10px rgba(216, 180, 254, 0.4);
+}
+
+@keyframes noticePop {
+  0% { transform: translate(-50%, -40%) scale(0.5); opacity: 0; }
+  60% { transform: translate(-50%, -55%) scale(1.1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+@keyframes noticeFade {
+  to { opacity: 0; transform: translate(-50%, -60%) scale(0.9); }
+}
+
+.battle-log-container {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.log-entry {
+  padding: 6px 16px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  animation: logSlideUp 0.3s ease-out forwards;
+}
+
+.log-entry.log-attack {
+  border-color: rgba(252, 211, 77, 0.4);
+  color: #fcd34d;
+}
+
+.log-entry.log-damage {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.log-entry.log-critical {
+  border-color: rgba(216, 180, 254, 0.4);
+  color: #e9d5ff;
+}
+
+@keyframes logSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 900px) {
+  .vs-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .vs-center {
+    order: -1;
+  }
+  .vs-opponent {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .vs-hp-fill.enemy {
+    float: none;
+  }
+}
+
 .gauge-fill.tier-1 { background: #3b82f6; } /* Pulse */
 .gauge-fill.tier-2 { background: #eab308; } /* Break */
 .gauge-fill.tier-3 { background: #a855f7; } /* Jam */

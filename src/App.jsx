@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { signInAnonymously } from "firebase/auth";
+import { ref, set } from "firebase/database";
+import { auth, db } from "./firebase";
 import clockTick from "./clock-tick.mp3";
 
 const KEYS = ["A", "S", "D", "F", "J", "K", "L", "Q", "W", "E", "R", "U", "I", "O", "P"];
@@ -287,6 +290,26 @@ function playMilestoneSound() {
 
 export default function App() {
   const [screen, setScreen] = useState("title");
+
+  useEffect(() => {
+    signInAnonymously(auth)
+      .then((userCredential) => {
+        const uid = userCredential.user.uid;
+        console.log("Firebase接続成功:", uid);
+
+        return set(ref(db, `test/${uid}`), {
+          connectedAt: Date.now(),
+          name: "Click or Die test",
+        });
+      })
+      .then(() => {
+        console.log("Realtime Database 書き込み成功");
+      })
+      .catch((error) => {
+        console.error("Firebase接続失敗:", error);
+      });
+  }, []);
+
   const [countdown, setCountdown] = useState(3);
 
   const [score, setScore] = useState(0);

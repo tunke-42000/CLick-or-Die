@@ -3,7 +3,7 @@ import clockTick from "./clock-tick.mp3";
 
 const KEYS = ["A", "S", "D", "F", "J", "K", "L", "Q", "W", "E", "R", "U", "I", "O", "P"];
 const GAME_TIME = 40;
-const STARTING_LIVES = 3;
+const STARTING_LIVES = 5;
 const TOP_SCORES_KEY = "click-or-die-top3";
 const FAKE_KEY_CHANCE = 0.08;
 const FAKE_PENALTY = 10;
@@ -282,6 +282,7 @@ export default function App() {
 
   const [message, setMessage] = useState("SYSTEM IDLE");
   const [flashType, setFlashType] = useState(null);
+  const [comboMsg, setComboMsg] = useState(null);
 
   const roundTimeoutRef = useRef(null);
   const globalTimerRef = useRef(null);
@@ -334,6 +335,7 @@ export default function App() {
     setSuccessfulHits(0);
     setMessage("PRESS THE KEY");
     setFlashType(null);
+    setComboMsg(null);
     setResultSaved(false);
 
     const firstKey = pickRandomKey();
@@ -390,6 +392,14 @@ export default function App() {
     setTotalReaction((prev) => prev + reaction);
     setSuccessfulHits((prev) => prev + 1);
 
+    if (nextCombo > 0) {
+      if (nextCombo % 10 === 0) {
+        setComboMsg({ text: `${nextCombo} COMBO!`, type: "milestone", id: Date.now() });
+      } else if (nextCombo >= 2) {
+        setComboMsg({ text: `${nextCombo} COMBO`, type: "normal", id: Date.now() });
+      }
+    }
+
     playSuccessSound();
     setMessage(judgement.label);
     setFlashType("success");
@@ -398,32 +408,65 @@ export default function App() {
 
   const handleWrong = () => {
     setScore((prev) => Math.max(0, prev - 6));
+    if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
     setCombo(0);
     playMissSound();
     setMessage("MISS");
     setFlashType("miss");
-    spawnNextKey(currentKey);
+
+    setLives((prev) => {
+      const nextLives = prev - 1;
+      if (nextLives <= 0) {
+        setTimeout(() => endGame(), 0);
+      } else {
+        setTimeout(() => spawnNextKey(currentKey), 0);
+      }
+      return nextLives;
+    });
   };
 
   const handleFakeHit = () => {
     setScore((prev) => Math.max(0, prev - FAKE_PENALTY));
+    if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
     setCombo(0);
     playMissSound();
     setMessage("TRAP");
     setFlashType("miss");
-    spawnNextKey(currentKey);
+
+    setLives((prev) => {
+      const nextLives = prev - 1;
+      if (nextLives <= 0) {
+        setTimeout(() => endGame(), 0);
+      } else {
+        setTimeout(() => spawnNextKey(currentKey), 0);
+      }
+      return nextLives;
+    });
   };
 
   const handleTimeout = () => {
     if (isFake) {
+      const nextCombo = combo + 1;
       setScore((prev) => prev + 6);
+      setCombo(nextCombo);
+      setMaxCombo((prev) => Math.max(prev, nextCombo));
+      setCorrectCount((prev) => prev + 1);
+      
+      if (nextCombo > 0) {
+        if (nextCombo % 10 === 0) {
+          setComboMsg({ text: `${nextCombo} COMBO!`, type: "milestone", id: Date.now() });
+        } else if (nextCombo >= 2) {
+          setComboMsg({ text: `${nextCombo} COMBO`, type: "normal", id: Date.now() });
+        }
+      }
+
       setMessage("GOOD IGNORE");
       setFlashType("success");
-      setCombo(0);
       spawnNextKey(currentKey);
       return;
     }
 
+    if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
     setCombo(0);
     playMissSound();
     setMessage("TOO SLOW");
@@ -546,6 +589,12 @@ export default function App() {
   }, [flashType]);
 
   useEffect(() => {
+    if (!comboMsg) return;
+    const id = setTimeout(() => setComboMsg(null), 600);
+    return () => clearTimeout(id);
+  }, [comboMsg]);
+
+  useEffect(() => {
     if (screen !== "playing") return;
 
     const onKeyDown = (e) => {
@@ -608,7 +657,7 @@ export default function App() {
 
                 <div className="stats3">
                   <StatCard label="Game Time" value={`${GAME_TIME}s`} />
-                  <StatCard label="HP" value={"💛💛💛"} hearts />
+                  <StatCard label="HP" value={"💛💛💛💛💛"} hearts />
 
                   <div className="stat stat-topscore">
                     <div className="stat-label">Top Score</div>
@@ -681,8 +730,19 @@ export default function App() {
                   <div className="target-wrap">
                     <div className="target-label">Target Key</div>
 
+                    {comboMsg && screen === "playing" && (
+                      <div className="combo-msg-wrap">
+                        <div key={comboMsg.id} className={`combo-text ${comboMsg.type}`}>
+                          {comboMsg.text}
+                        </div>
+                      </div>
+                    )}
+
                     {screen === "playing" ? (
-                      <div className={`key-box ${isFake ? "fake" : ""}`}>
+                      <div
+                        className={`key-box ${isFake ? "fake" : ""}`}
+                        data-text={currentKey}
+                      >
                         {currentKey}
                       </div>
                     ) : (
@@ -717,7 +777,7 @@ export default function App() {
                     <div className="side-title">Combat Feed</div>
                     <div className="feed-row">
                       <span>Combo</span>
-                      <span className="feed-strong feed-red">{combo}</span>
+                      <span key={`side-${combo}`} className="feed-strong feed-red combo-side-anim">{combo}</span>
                     </div>
                     <div className="feed-row">
                       <span>Max Combo</span>

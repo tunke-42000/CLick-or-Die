@@ -388,52 +388,44 @@ export default function App() {
 
   const handleIncomingAttack = (type) => {
     switch(type) {
-      case "pulse":
-        setBattleHp(s => Math.max(0, s - 6));
-        setMessage({ text: "UNDER ATTACK: PULSE -6", type: "bad", id: Date.now() });
+      case "light":
+        setBattleHp(s => Math.max(0, s - 8));
+        setMessage({ text: "UNDER ATTACK: LIGHT -8", type: "bad", id: Date.now() });
         setFlashType("trap");
-        setLastDamageTaken("PULSE SHOT");
-        setCentralNotice({ text: "PULSE SHOT HIT -6", type: "damage", subtext: "Enemy attacked!" });
-        addLog("Took 6 DMG from PULSE SHOT", "damage");
+        setLastDamageTaken("LIGHT ATTACK");
+        setCentralNotice({ text: "LIGHT ATTACK HIT -8", type: "damage", subtext: "Enemy used Light Attack!" });
+        addLog("Took 8 DMG from LIGHT ATTACK", "damage");
         break;
-      case "break":
-        setBattleHp(s => Math.max(0, s - 10));
-        setScore(s => Math.max(0, s - 15));
-        setMessage({ text: "SYSTEM DAMAGED: BREAK SHOT", type: "bad", id: Date.now() });
+      case "normal":
+        setBattleHp(s => Math.max(0, s - 18));
+        setScore(s => Math.max(0, s - 5));
+        setMessage({ text: "SYSTEM DAMAGED: NORMAL ATTACK", type: "bad", id: Date.now() });
         setFlashType("trap");
         setGlitchAnim((prev) => prev + 1);
-        setLastDamageTaken("BREAK SHOT");
-        setCentralNotice({ text: "BREAK SHOT HIT -10", type: "damage", subtext: "Enemy heavily attacked!" });
-        addLog("Took 10 DMG from BREAK SHOT", "damage");
+        setLastDamageTaken("NORMAL ATTACK");
+        setCentralNotice({ text: "NORMAL ATTACK HIT -18", type: "damage", subtext: "Enemy used Normal Attack!" });
+        addLog("Took 18 DMG from NORMAL ATTACK", "damage");
         break;
-      case "timeJam":
-      case "jam":
-        setBattleHp(s => Math.max(0, s - 8));
+      case "heavy":
+        setBattleHp(s => Math.max(0, s - 30));
         jamChargesRef.current += 2;
-        setMessage({ text: "SYSTEM JAMMED!", type: "bad", id: Date.now() });
+        setMessage({ text: "SYSTEM JAMMED: HEAVY ATTACK!", type: "bad", id: Date.now() });
         setFlashType("trap");
-        setLastDamageTaken("JAM ATTACK");
-        setCentralNotice({ text: "JAM ATTACK HIT -8", type: "damage", subtext: "Input speed penalized!" });
-        addLog("Took 8 DMG from JAM", "damage");
+        setGlitchAnim((prev) => prev + 1);
+        setLastDamageTaken("HEAVY ATTACK");
+        setCentralNotice({ text: "HEAVY ATTACK HIT -30", type: "damage", subtext: "Input speed penalized!" });
+        addLog("Took 30 DMG from HEAVY ATTACK", "damage");
         break;
-      case "fakeBoost":
-        fakeBoostChargesRef.current += 3;
-        setMessage({ text: "UNDER ATTACK: FAKE BOOST!", type: "bad", id: Date.now() });
-        setFlashType("trap");
-        setLastDamageTaken("FAKE BOOST");
-        setCentralNotice({ text: "FAKE BOOST APPLIED", type: "damage", subtext: "Fake keys increased!" });
-        addLog("Enemy boosted Fake Keys", "damage");
-        break;
-      case "overdrive":
-        setBattleHp(s => Math.max(0, s - 16));
+      case "finisher":
+        setBattleHp(s => Math.max(0, s - 45));
         fakeBoostChargesRef.current += 2;
-        setMessage({ text: "CRITICAL: OVERDRIVE HIT!", type: "bad", id: Date.now() });
+        setMessage({ text: "CRITICAL: FINISHER HIT!", type: "bad", id: Date.now() });
         setFlashType("trap");
         setGlitchAnim(2);
         playTone({ frequency: 150, sweepTo: 50, duration: 0.8, type: "sawtooth", volume: 0.1 });
-        setLastDamageTaken("OVERDRIVE");
-        setCentralNotice({ text: "OVERDRIVE HIT -16", type: "critical", subtext: "Critical Damage!" });
-        addLog("Took 16 DMG from OVERDRIVE", "critical");
+        setLastDamageTaken("FINISHER");
+        setCentralNotice({ text: "FINISHER HIT -45", type: "critical", subtext: "Critical Damage!" });
+        addLog("Took 45 DMG from FINISHER", "critical");
         break;
       default: break;
     }
@@ -692,43 +684,31 @@ export default function App() {
   const manualAttackTrigger = () => {
     if (gameMode !== "multi" || attackGauge < 25) return;
     
-    let type = "pulse";
+    let type = "light";
     let cost = 25;
-    let msg = "ATTACK SENT: PULSE SHOT";
+    let msg = "ATTACK SENT: LIGHT ATTACK";
 
     if (attackGauge >= 100) {
-      type = "overdrive";
+      type = "finisher";
       cost = 100;
-      msg = "ATTACK SENT: OVERDRIVE";
+      msg = "ATTACK SENT: FINISHER";
     } else if (attackGauge >= 75) {
-      type = "jam";
+      type = "heavy";
       cost = 75;
-      msg = "ATTACK SENT: JAM ATTACK";
+      msg = "ATTACK SENT: HEAVY ATTACK";
     } else if (attackGauge >= 50) {
-      type = "break";
+      type = "normal";
       cost = 50;
-      msg = "ATTACK SENT: BREAK SHOT";
+      msg = "ATTACK SENT: NORMAL ATTACK";
     }
 
-    setAttackGauge(prev => prev - cost);
+    setAttackGauge(prev => Math.max(0, prev - cost));
     sendAttack(type, msg);
   };
 
   const addGauge = (amount) => {
     if (gameMode === "multi") {
-      setAttackGauge(prev => {
-        const next = Math.max(0, Math.min(100, prev + amount));
-        if (next >= 100) {
-          // Auto fire overdrive to save full bar lockup, or just let them press it.
-          // Spec: "ゲージ到達で自動攻撃". Let's auto fire overdrive if hits 100, but allow manual for < 100!
-          setTimeout(() => {
-             setAttackGauge(0);
-             sendAttack("overdrive", "ATTACK SENT: OVERDRIVE");
-          }, 0);
-          return 0;
-        }
-        return next;
-      });
+      setAttackGauge(prev => Math.max(0, Math.min(100, prev + amount)));
     }
   };
 
@@ -1287,14 +1267,21 @@ export default function App() {
                     else if (battleHp < eHp) { leadStatus = "LOSING"; leadClass = "losing"; }
                     
                     const getNextAttackInfo = (gauge) => {
-                      if (gauge >= 100) return { name: "OVERDRIVE", color: "#f87171" };
-                      if (gauge >= 75) return { name: "JAM", color: "#d8b4fe" };
-                      if (gauge >= 50) return { name: "BREAK", color: "#fcd34d" };
-                      if (gauge >= 25) return { name: "PULSE", color: "#93c5fd" };
-                      return { name: "CHARGING", color: "#9ca3af" };
+                      if (gauge >= 100) return { label: "SPACE: FINISHER", color: "#ef4444" };
+                      if (gauge >= 75) return { label: "SPACE: HEAVY ATTACK", color: "#d8b4fe" };
+                      if (gauge >= 50) return { label: "SPACE: NORMAL ATTACK", color: "#fcd34d" };
+                      if (gauge >= 25) return { label: "SPACE: LIGHT ATTACK", color: "#93c5fd" };
+                      return { label: "NEXT: LIGHT ATTACK", color: "#9ca3af" };
+                    };
+                    const getEnemyAttackInfo = (gauge) => {
+                      if (gauge >= 100) return { label: "READY: FINISHER", color: "#ef4444" };
+                      if (gauge >= 75) return { label: "READY: HEAVY ATTACK", color: "#d8b4fe" };
+                      if (gauge >= 50) return { label: "READY: NORMAL ATTACK", color: "#fcd34d" };
+                      if (gauge >= 25) return { label: "READY: LIGHT ATTACK", color: "#93c5fd" };
+                      return { label: "NEXT: LIGHT ATTACK", color: "#9ca3af" };
                     };
                     const myAttackInfo = getNextAttackInfo(attackGauge);
-                    const enemyAttackInfo = getNextAttackInfo(eGauge);
+                    const enemyAttackInfo = getEnemyAttackInfo(eGauge);
 
                     return (
                       <>
@@ -1311,7 +1298,7 @@ export default function App() {
                               <div className="gauge-marker" style={{ left: "50%" }} />
                               <div className="gauge-marker" style={{ left: "75%" }} />
                             </div>
-                            <div className="vs-gauge-label" style={{ color: myAttackInfo.color, textShadow: attackGauge >= 25 ? `0 0 10px ${myAttackInfo.color}` : "none" }}>NEXT: {myAttackInfo.name}</div>
+                            <div className="vs-gauge-label" style={{ color: myAttackInfo.color, textShadow: attackGauge >= 25 ? `0 0 10px ${myAttackInfo.color}` : "none" }}>{myAttackInfo.label}</div>
                           </div>
                         </div>
                         
@@ -1335,7 +1322,7 @@ export default function App() {
                               <div className="gauge-marker" style={{ right: "50%" }} />
                               <div className="gauge-marker" style={{ right: "75%" }} />
                             </div>
-                            <div className="vs-gauge-label" style={{ color: enemyAttackInfo.color, textShadow: eGauge >= 25 ? `0 0 10px ${enemyAttackInfo.color}` : "none" }}>NEXT: {enemyAttackInfo.name}</div>
+                            <div className="vs-gauge-label" style={{ color: enemyAttackInfo.color, textShadow: eGauge >= 25 ? `0 0 10px ${enemyAttackInfo.color}` : "none" }}>{enemyAttackInfo.label}</div>
                           </div>
                         </div>
                       </>

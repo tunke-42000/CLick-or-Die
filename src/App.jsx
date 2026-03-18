@@ -64,51 +64,51 @@ function updateTopScores(previousScores, newScore) {
 }
 
 function getRank(score) {
-  if (score >= 800) return "Ω";
-  if (score >= 760) return "Z";
-  if (score >= 720) return "X";
-  if (score >= 680) return "SSS";
-  if (score >= 640) return "SS";
-  if (score >= 600) return "S";
-  if (score >= 560) return "A+";
-  if (score >= 520) return "A";
-  if (score >= 480) return "A-";
-  if (score >= 465) return "B+";
-  if (score >= 450) return "B";
-  if (score >= 420) return "B-";
-  if (score >= 390) return "C+";
-  if (score >= 360) return "C";
-  if (score >= 330) return "C-";
-  if (score >= 290) return "D+";
-  if (score >= 250) return "D";
-  if (score >= 220) return "D-";
-  if (score >= 180) return "E+";
-  if (score >= 130) return "E";
+  if (score >= 1400) return "Ω";
+  if (score >= 1360) return "Z";
+  if (score >= 1320) return "X";
+  if (score >= 1280) return "SSS";
+  if (score >= 1240) return "SS";
+  if (score >= 1200) return "S";
+  if (score >= 1160) return "A+";
+  if (score >= 1120) return "A";
+  if (score >= 1080) return "A-";
+  if (score >= 1065) return "B+";
+  if (score >= 1050) return "B";
+  if (score >= 1020) return "B-";
+  if (score >= 990) return "C+";
+  if (score >= 960) return "C";
+  if (score >= 930) return "C-";
+  if (score >= 890) return "D+";
+  if (score >= 850) return "D";
+  if (score >= 820) return "D-";
+  if (score >= 780) return "E+";
+  if (score >= 730) return "E";
   return "E-";
 }
 
 function getNextRankInfo(score) {
   const rankTable = [
-    { min: 800, rank: "Ω" },
-    { min: 760, rank: "Z" },
-    { min: 720, rank: "X" },
-    { min: 680, rank: "SSS" },
-    { min: 640, rank: "SS" },
-    { min: 600, rank: "S" },
-    { min: 560, rank: "A+" },
-    { min: 520, rank: "A" },
-    { min: 480, rank: "A-" },
-    { min: 465, rank: "B+" },
-    { min: 450, rank: "B" },
-    { min: 420, rank: "B-" },
-    { min: 390, rank: "C+" },
-    { min: 360, rank: "C" },
-    { min: 330, rank: "C-" },
-    { min: 290, rank: "D+" },
-    { min: 250, rank: "D" },
-    { min: 220, rank: "D-" },
-    { min: 180, rank: "E+" },
-    { min: 130, rank: "E" },
+    { min: 1400, rank: "Ω" },
+    { min: 1360, rank: "Z" },
+    { min: 1320, rank: "X" },
+    { min: 1280, rank: "SSS" },
+    { min: 1240, rank: "SS" },
+    { min: 1200, rank: "S" },
+    { min: 1160, rank: "A+" },
+    { min: 1120, rank: "A" },
+    { min: 1080, rank: "A-" },
+    { min: 1065, rank: "B+" },
+    { min: 1050, rank: "B" },
+    { min: 1020, rank: "B-" },
+    { min: 990, rank: "C+" },
+    { min: 960, rank: "C" },
+    { min: 930, rank: "C-" },
+    { min: 890, rank: "D+" },
+    { min: 850, rank: "D" },
+    { min: 820, rank: "D-" },
+    { min: 780, rank: "E+" },
+    { min: 730, rank: "E" },
     { min: 0, rank: "E-" },
   ];
 
@@ -260,6 +260,31 @@ function playGameOverSound() {
   );
 }
 
+function playFakeAvoidSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+
+  // A fast, rising digital sweep to feel like "hacked avoided" or "trap evaded"
+  playTone({ frequency: 600, sweepTo: 1200, duration: 0.06, type: "square", volume: 0.025 });
+  setTimeout(() => playTone({ frequency: 1200, sweepTo: 2400, duration: 0.08, type: "sine", volume: 0.025 }), 60);
+}
+
+function playMilestoneSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+
+  playTone({ frequency: 880, sweepTo: 1760, duration: 0.1, type: "sine", volume: 0.035 });
+  setTimeout(() => playTone({ frequency: 1320, sweepTo: 2640, duration: 0.15, type: "sine", volume: 0.035 }), 120);
+}
+
 export default function App() {
   const [screen, setScreen] = useState("title");
   const [countdown, setCountdown] = useState(3);
@@ -279,14 +304,18 @@ export default function App() {
   const [totalReaction, setTotalReaction] = useState(0);
   const [successfulHits, setSuccessfulHits] = useState(0);
   const [isFake, setIsFake] = useState(false);
+  const [avoidedKey, setAvoidedKey] = useState(null);
 
-  const [message, setMessage] = useState("SYSTEM IDLE");
+  const [message, setMessage] = useState({ text: "SYSTEM IDLE", id: 0 });
   const [flashType, setFlashType] = useState(null);
   const [comboMsg, setComboMsg] = useState(null);
+  const [spawnId, setSpawnId] = useState(0);
+  const [glitchAnim, setGlitchAnim] = useState(0);
 
   const roundTimeoutRef = useRef(null);
   const globalTimerRef = useRef(null);
   const tickAudioRef = useRef(null);
+  const timeLeftRef = useRef(GAME_TIME);
 
   const avgReaction = successfulHits > 0 ? Math.round(totalReaction / successfulHits) : 0;
   const roundWindow = useMemo(() => getRoundWindow(correctCount), [correctCount]);
@@ -322,18 +351,20 @@ export default function App() {
     setCurrentKey(next);
     setIsFake(fake);
     setReactionStart(Date.now());
+    setSpawnId(Date.now());
   };
 
   const beginPlay = () => {
     setScore(0);
     setTimeLeft(GAME_TIME);
+    timeLeftRef.current = GAME_TIME;
     setLives(STARTING_LIVES);
     setCombo(0);
     setMaxCombo(0);
     setCorrectCount(0);
     setTotalReaction(0);
     setSuccessfulHits(0);
-    setMessage("PRESS THE KEY");
+    setMessage({ text: "PRESS THE KEY", id: Date.now() });
     setFlashType(null);
     setComboMsg(null);
     setResultSaved(false);
@@ -344,6 +375,7 @@ export default function App() {
     setCurrentKey(firstKey);
     setIsFake(firstFake);
     setReactionStart(Date.now());
+    setSpawnId(Date.now());
     setScreen("playing");
   };
 
@@ -354,7 +386,7 @@ export default function App() {
     setCountdown(3);
     setCurrentKey("");
     setIsFake(false);
-    setMessage("SYSTEM ARMED");
+    setMessage({ text: "SYSTEM ARMED", id: Date.now() });
     setFlashType(null);
     setScreen("countdown");
   };
@@ -365,7 +397,7 @@ export default function App() {
     playGameOverSound();
     setCurrentKey("");
     setIsFake(false);
-    setMessage("SYSTEM FAILURE");
+    setMessage({ text: "SYSTEM FAILURE", id: Date.now() });
     setScreen("result");
   };
 
@@ -374,16 +406,27 @@ export default function App() {
     stopTickSound();
     setCurrentKey("");
     setIsFake(false);
-    setMessage("SYSTEM IDLE");
+    setMessage({ text: "SYSTEM IDLE", id: Date.now() });
     setFlashType(null);
     setScreen("title");
   };
 
   const handleCorrect = () => {
+    const isRush = timeLeftRef.current <= 10;
+    const rushMultiplier = isRush ? 1.5 : 1;
+
     const reaction = Date.now() - reactionStart;
     const nextCombo = combo + 1;
     const judgement = getJudgement(reaction);
-    const gained = 6 + Math.min(6, Math.floor(nextCombo / 2)) + judgement.bonus;
+    
+    // Uncapped combo points, max +15
+    const baseComboBonus = Math.min(15, Math.floor(nextCombo / 2));
+    const baseGained = 6 + baseComboBonus + judgement.bonus;
+    let gained = Math.floor(baseGained * rushMultiplier);
+
+    if (nextCombo > 0 && nextCombo % 10 === 0) {
+      gained += 50;
+    }
 
     setScore((prev) => prev + gained);
     setCombo(nextCombo);
@@ -394,14 +437,15 @@ export default function App() {
 
     if (nextCombo > 0) {
       if (nextCombo % 10 === 0) {
-        setComboMsg({ text: `${nextCombo} COMBO!`, type: "milestone", id: Date.now() });
+        setComboMsg({ text: `${nextCombo} COMBO! +50`, type: "milestone", id: Date.now() });
+        playMilestoneSound();
       } else if (nextCombo >= 2) {
         setComboMsg({ text: `${nextCombo} COMBO`, type: "normal", id: Date.now() });
       }
     }
 
     playSuccessSound();
-    setMessage(judgement.label);
+    setMessage({ text: judgement.label, id: Date.now() });
     setFlashType("success");
     spawnNextKey(currentKey);
   };
@@ -411,7 +455,7 @@ export default function App() {
     if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
     setCombo(0);
     playMissSound();
-    setMessage("MISS");
+    setMessage({ text: "MISS", id: Date.now() });
     setFlashType("miss");
 
     setLives((prev) => {
@@ -430,8 +474,9 @@ export default function App() {
     if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
     setCombo(0);
     playMissSound();
-    setMessage("TRAP");
-    setFlashType("miss");
+    setMessage({ text: "TRAP", id: Date.now() });
+    setFlashType("trap");
+    setGlitchAnim(Date.now());
 
     setLives((prev) => {
       const nextLives = prev - 1;
@@ -446,22 +491,38 @@ export default function App() {
 
   const handleTimeout = () => {
     if (isFake) {
+      const isRush = timeLeftRef.current <= 10;
+      const rushMultiplier = isRush ? 1.5 : 1;
+
       const nextCombo = combo + 1;
-      setScore((prev) => prev + 6);
+      const baseComboBonus = Math.min(15, Math.floor(nextCombo / 2));
+      const baseGained = 10 + baseComboBonus;
+      let gained = Math.floor(baseGained * rushMultiplier);
+
+      if (nextCombo > 0 && nextCombo % 10 === 0) {
+        gained += 50;
+      }
+
+      setScore((prev) => prev + gained);
       setCombo(nextCombo);
       setMaxCombo((prev) => Math.max(prev, nextCombo));
       setCorrectCount((prev) => prev + 1);
       
       if (nextCombo > 0) {
         if (nextCombo % 10 === 0) {
-          setComboMsg({ text: `${nextCombo} COMBO!`, type: "milestone", id: Date.now() });
+          setComboMsg({ text: `${nextCombo} COMBO! +50`, type: "milestone", id: Date.now() });
+          playMilestoneSound();
         } else if (nextCombo >= 2) {
           setComboMsg({ text: `${nextCombo} COMBO`, type: "normal", id: Date.now() });
         }
       }
 
-      setMessage("GOOD IGNORE");
-      setFlashType("success");
+      playFakeAvoidSound();
+      setMessage({ text: "FAKE AVOID", id: Date.now() });
+      setFlashType("fake-avoid");
+      setAvoidedKey(currentKey);
+      
+      setTimeout(() => setAvoidedKey(null), 350);
       spawnNextKey(currentKey);
       return;
     }
@@ -469,7 +530,7 @@ export default function App() {
     if (combo >= 5) setComboMsg({ text: "COMBO BREAK", type: "break", id: Date.now() });
     setCombo(0);
     playMissSound();
-    setMessage("TOO SLOW");
+    setMessage({ text: "TOO SLOW", id: Date.now() });
     setFlashType("miss");
 
     setLives((prev) => {
@@ -534,7 +595,11 @@ export default function App() {
     if (screen !== "playing") return;
 
     globalTimerRef.current = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
+      setTimeLeft((prev) => {
+        const next = prev - 1;
+        timeLeftRef.current = next;
+        return next;
+      });
     }, 1000);
 
     return () => {
@@ -628,15 +693,37 @@ export default function App() {
 
   const hpDisplay = "💛".repeat(lives) + "🖤".repeat(STARTING_LIVES - lives);
   const isDanger = timeLeft <= 10 || lives === 1;
+  const isRushTime = screen === "playing" && timeLeft <= 10;
+  const isZone = combo >= 20;
+
+  const getMessageClass = (text) => {
+    if (text === "PERFECT") return "msg-perfect";
+    if (text === "GREAT") return "msg-great";
+    if (text === "GOOD") return "msg-good";
+    if (text === "SLOW" || text === "TOO SLOW") return "msg-slow";
+    if (text === "MISS" || text === "SYSTEM FAILURE") return "msg-miss";
+    if (text === "TRAP") return "msg-trap";
+    if (text === "FAKE AVOID") return "msg-fake-avoid";
+    return "msg-default";
+  };
+
+  const shouldBump = message.text === "PERFECT" || message.text === "GREAT";
 
   return (
-    <div className="app">
+    <div 
+      className={`app ${glitchAnim ? "glitch-shake" : ""}`} 
+      onAnimationEnd={(e) => {
+        if (e.animationName === "appGlitchShake") setGlitchAnim(0);
+      }}
+    >
       {flashType && <div className={`flash ${flashType}`} />}
 
       <div className="shell">
         <header className="header">
           <div>
-            <div className="eyebrow">Emergency Input Protocol</div>
+            <div className={`eyebrow ${isRushTime ? "rush" : ""}`}>
+              {isRushTime ? "FINAL RUSH // SCORE x1.5" : "Emergency Input Protocol"}
+            </div>
             <h1 className="title">CLICK OR DIE</h1>
           </div>
           <div className="badge">{screen === "playing" ? "Live" : "Standby"}</div>
@@ -722,9 +809,7 @@ export default function App() {
               <section className="game-grid">
                 <div className="arena">
                   <div
-                    className={`arena-inner ${
-                      isDanger && screen === "playing" ? "danger" : ""
-                    }`}
+                    className={`arena-inner ${isDanger && screen === "playing" ? "danger" : ""} ${isZone ? "zone" : ""}`}
                   />
 
                   <div className="target-wrap">
@@ -739,18 +824,31 @@ export default function App() {
                     )}
 
                     {screen === "playing" ? (
-                      <div
-                        className={`key-box ${isFake ? "fake" : ""}`}
-                        data-text={currentKey}
-                      >
-                        {currentKey}
+                      <div className="key-box-wrapper">
+                        <div
+                          key={spawnId}
+                          className={`key-box ${isFake ? "fake" : ""} ${shouldBump ? "bump-anim" : ""}`}
+                          data-text={currentKey}
+                        >
+                          {currentKey}
+                        </div>
+                        {avoidedKey && (
+                          <div
+                            className="key-box fake avoided-anim"
+                            data-text={avoidedKey}
+                          >
+                            {avoidedKey}
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      <div className="rank-box">{getRank(score)}</div>
+                      <div className="key-box-wrapper">
+                        <div className="rank-box">{getRank(score)}</div>
+                      </div>
                     )}
 
-                    <div className="status-text">
-                      {screen === "playing" ? message : "Final Rank"}
+                    <div className={`status-text ${getMessageClass(message.text)}`} key={message.id}>
+                      {screen === "playing" ? message.text : "Final Rank"}
                     </div>
 
                     {screen === "playing" && (

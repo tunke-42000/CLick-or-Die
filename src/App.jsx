@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signInAnonymously } from "firebase/auth";
-import { ref, set } from "firebase/database";
+import { ref, set, get, onValue, onDisconnect, update, remove } from "firebase/database";
 import { auth, db } from "./firebase";
 import clockTick from "./clock-tick.mp3";
 
@@ -291,24 +291,7 @@ function playMilestoneSound() {
 export default function App() {
   const [screen, setScreen] = useState("title");
 
-  useEffect(() => {
-    signInAnonymously(auth)
-      .then((userCredential) => {
-        const uid = userCredential.user.uid;
-        console.log("Firebase接続成功:", uid);
-
-        return set(ref(db, `test/${uid}`), {
-          connectedAt: Date.now(),
-          name: "Click or Die test",
-        });
-      })
-      .then(() => {
-        console.log("Realtime Database 書き込み成功");
-      })
-      .catch((error) => {
-        console.error("Firebase接続失敗:", error);
-      });
-  }, []);
+  // Initial connection test removed
 
   const [countdown, setCountdown] = useState(3);
 
@@ -322,9 +305,18 @@ export default function App() {
   const [roomIdInput, setRoomIdInput] = useState("");
   const [myRoomId, setMyRoomId] = useState("");
 
-  const wsRef = useRef(null);
+  const [myUid, setMyUid] = useState(null);
+  const roomUnsubscribeRef = useRef(null);
+  const myPlayerRef = useRef(null);
+
   const [opponentData, setOpponentData] = useState(null);
   const [opponentStatus, setOpponentStatus] = useState(null);
+
+  useEffect(() => {
+    signInAnonymously(auth)
+      .then((cred) => setMyUid(cred.user.uid))
+      .catch((err) => console.error("Firebase Login Failed:", err));
+  }, []);
 
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
@@ -357,65 +349,110 @@ export default function App() {
 
   const nextRankInfo = getNextRankInfo(score);
 
-  const connectToRoom = (id) => {
-    if (!id.trim()) return;
+  const cleanupRoom = () => {
+    if (roomUnsubscribeRef.current) {
+      roomUnsubscribeRef.current();
+      roomUnsubscribeRef.current = null;
+    }
+    if (myPlayerRef.current) {
+      remove(myPlayerRef.current).catch(() => {});
+      myPlayerRef.current = null;
+    }
+  };
 
+  const connectToRoom = async (id) => {
+    if (!id.trim() || !myUid) return;
+    
+    const validId = id.toUpperCase();
     setGameMode("multi");
-    setMyRoomId(id.toUpperCase());
+    setMyRoomId(validId);
     setOpponentData(null);
     setOpponentStatus("waiting");
     setScreen("room_wait");
     setMessage({ text: "CONNECTING...", id: Date.now() });
 
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
+    cleanupRoom();
 
-    const ws = new WebSocket("ws://localhost:3001");
-    wsRef.current = ws;
+    const roomRef = ref(db, `rooms/${validId}`);
+    try {
+      const snapshot = await get(roomRef);
+      let currentPlayers = {};
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        currentPlayers = data.players || {};
+      }
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "join", roomId: id.toUpperCase() }));
-    };
+      const playerIds = Object.keys(currentPlayers);
+      if (playerIds.length >= 2 && !playerIds.includes(myUid)) {
+        setMessage({ text: "ROOM IS FULL", id: Date.now() });
+        setScreen("room_input");
+        return;
+      }
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "waiting") {
-          setOpponentStatus("waiting");
-          setMessage({ text: "WAITING FOR OPPONENT", id: Date.now() });
-        } else if (data.type === "matched") {
-          setOpponentStatus("matched");
-          setMessage({ text: "OPPONENT FOUND!", id: Date.now() });
+      const playerRef = ref(db, `rooms/${validId}/players/${myUid}`);
+      myPlayerRef.current = playerRef;
+      
+      onDisconnect(playerRef).remove();
+      await set(playerRef, { score: 0, lives: STARTING_LIVES, status: "alive" });
 
-          setScore(0);
-          setTimeLeft(GAME_TIME);
-          timeLeftRef.current = GAME_TIME;
-          setLives(STARTING_LIVES);
-          setCombo(0);
-          setMaxCombo(0);
-          setCorrectCount(0);
-          setTotalReaction(0);
-          setSuccessfulHits(0);
-          setOpponentData({ score: 0, lives: STARTING_LIVES, status: "alive" });
-
-          setTimeout(() => {
-            startGame();
-          }, 1500);
-        } else if (data.type === "opponent_update") {
-          setOpponentData(data.payload);
-        } else if (data.type === "opponent_disconnected") {
+      let matchTriggered = false;
+      const unsubscribe = onValue(roomRef, (snap) => {
+        const data = snap.val();
+        if (!data || !data.players || !data.players[myUid]) {
           setOpponentStatus("disconnected");
+          return;
         }
-      } catch (err) { }
-    };
+
+        const players = data.players;
+        const ids = Object.keys(players);
+        
+        if (ids.length < 2) {
+          setOpponentStatus("waiting");
+          if (matchTriggered) {
+             setOpponentStatus("disconnected");
+          } else {
+             setMessage({ text: "WAITING FOR OPPONENT", id: Date.now() });
+          }
+          setOpponentData(null);
+        } else {
+          const opponentId = ids.find(p => p !== myUid);
+          if (opponentId) {
+            const opData = players[opponentId];
+            setOpponentData(opData);
+            
+            if (!matchTriggered) {
+              matchTriggered = true;
+              setOpponentStatus("matched");
+              setMessage({ text: "OPPONENT FOUND!", id: Date.now() });
+              
+              setScore(0);
+              setTimeLeft(GAME_TIME);
+              timeLeftRef.current = GAME_TIME;
+              setLives(STARTING_LIVES);
+              setCombo(0);
+              setMaxCombo(0);
+              setCorrectCount(0);
+              setTotalReaction(0);
+              setSuccessfulHits(0);
+
+              setTimeout(() => {
+                startGame();
+              }, 1500);
+            }
+          }
+        }
+      });
+
+      roomUnsubscribeRef.current = unsubscribe;
+    } catch (error) {
+      console.error(error);
+      setMessage({ text: "CONNECTION FAILED", id: Date.now() });
+      setScreen("room_input");
+    }
   };
 
   const handleRematch = () => {
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: "rematch" }));
-      connectToRoom(myRoomId);
-    }
+    connectToRoom(myRoomId);
   };
 
   const clearAllTimers = () => {
@@ -494,6 +531,7 @@ export default function App() {
   };
 
   const goToTitle = () => {
+    cleanupRoom();
     clearAllTimers();
     stopTickSound();
     setCurrentKey("");
@@ -637,13 +675,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (gameMode === "multi" && screen === "playing" && wsRef.current?.readyState === 1) {
-      wsRef.current.send(JSON.stringify({
-        type: "state_update",
-        payload: { score, lives, status: lives <= 0 ? "dead" : "alive" }
-      }));
+    if (gameMode === "multi" && screen === "playing" && myPlayerRef.current && myUid) {
+      update(myPlayerRef.current, { score, lives, status: lives <= 0 ? "dead" : "alive" }).catch(() => {});
     }
-  }, [score, lives, gameMode, screen]);
+  }, [score, lives, gameMode, screen, myUid]);
 
   useEffect(() => {
     if (screen === "playing" && gameMode === "multi" && opponentStatus === "disconnected") {
@@ -930,7 +965,7 @@ export default function App() {
 
                 {opponentStatus === "waiting" && (
                   <div style={{ marginTop: 32 }}>
-                    <button className="title-btn" onClick={() => { wsRef.current?.close(); goToTitle(); }}>
+                    <button className="title-btn" onClick={goToTitle}>
                       Cancel
                     </button>
                   </div>
@@ -1126,7 +1161,7 @@ export default function App() {
                         <button className="retry-btn" onClick={gameMode === "multi" ? handleRematch : startGame}>
                           {gameMode === "multi" ? "Rematch" : "Retry"}
                         </button>
-                        <button className="title-btn" onClick={() => { wsRef.current?.close(); goToTitle(); }}>
+                        <button className="title-btn" onClick={goToTitle}>
                           Title
                         </button>
                       </div>

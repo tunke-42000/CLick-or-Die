@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signInAnonymously } from "firebase/auth";
-import { ref, set, get, onValue, onDisconnect, update, remove } from "firebase/database";
+import { ref, set, get, onValue, onDisconnect, update, remove, push, onChildAdded } from "firebase/database";
 import { auth, db } from "./firebase";
 import clockTick from "./clock-tick.mp3";
 
@@ -307,10 +307,18 @@ export default function App() {
 
   const [myUid, setMyUid] = useState(null);
   const roomUnsubscribeRef = useRef(null);
+  const attacksUnsubscribeRef = useRef(null);
   const myPlayerRef = useRef(null);
 
   const [opponentData, setOpponentData] = useState(null);
   const [opponentStatus, setOpponentStatus] = useState(null);
+  const [opponentUid, setOpponentUid] = useState(null);
+
+  const jamChargesRef = useRef(0);
+  const fakeBoostChargesRef = useRef(0);
+  const [lastAttackSent, setLastAttackSent] = useState(null);
+  const [lastDamageTaken, setLastDamageTaken] = useState(null);
+  const [enemyHitAnim, setEnemyHitAnim] = useState(false);
 
   useEffect(() => {
     signInAnonymously(auth)
@@ -354,9 +362,46 @@ export default function App() {
       roomUnsubscribeRef.current();
       roomUnsubscribeRef.current = null;
     }
+    if (attacksUnsubscribeRef.current) {
+      attacksUnsubscribeRef.current();
+      attacksUnsubscribeRef.current = null;
+    }
     if (myPlayerRef.current) {
       remove(myPlayerRef.current).catch(() => {});
       myPlayerRef.current = null;
+    }
+  };
+
+  const handleIncomingAttack = (type) => {
+    switch(type) {
+      case "scoreBreak":
+        setScore(s => Math.max(0, s - 15));
+        setMessage({ text: "UNDER ATTACK: SCORE BREAK -15", type: "bad", id: Date.now() });
+        setFlashType("trap");
+        setGlitchAnim((prev) => prev + 1);
+        setLastDamageTaken("SCORE BREAK");
+        break;
+      case "timeJam":
+        jamChargesRef.current += 3;
+        setMessage({ text: "UNDER ATTACK: TIME JAM!", type: "bad", id: Date.now() });
+        setFlashType("trap");
+        setLastDamageTaken("TIME JAM");
+        break;
+      case "fakeBoost":
+        fakeBoostChargesRef.current += 3;
+        setMessage({ text: "UNDER ATTACK: FAKE BOOST!", type: "bad", id: Date.now() });
+        setFlashType("trap");
+        setLastDamageTaken("FAKE BOOST");
+        break;
+      case "overdrive":
+        setScore(s => Math.max(0, s - 30));
+        setMessage({ text: "CRITICAL: OVERDRIVE -30!", type: "bad", id: Date.now() });
+        setFlashType("trap");
+        setGlitchAnim(2);
+        playTone({ frequency: 150, sweepTo: 50, duration: 0.8, type: "sawtooth", volume: 0.1 });
+        setLastDamageTaken("OVERDRIVE");
+        break;
+      default: break;
     }
   };
 
@@ -414,10 +459,12 @@ export default function App() {
              setMessage({ text: "WAITING FOR OPPONENT", id: Date.now() });
           }
           setOpponentData(null);
+          setOpponentUid(null);
         } else {
-          const opponentId = ids.find(p => p !== myUid);
-          if (opponentId) {
-            const opData = players[opponentId];
+          const enemyId = ids.find(p => p !== myUid);
+          if (enemyId) {
+            setOpponentUid(enemyId);
+            const opData = players[enemyId];
             setOpponentData(opData);
             
             if (!matchTriggered) {
@@ -434,6 +481,10 @@ export default function App() {
               setCorrectCount(0);
               setTotalReaction(0);
               setSuccessfulHits(0);
+              jamChargesRef.current = 0;
+              fakeBoostChargesRef.current = 0;
+              setLastAttackSent(null);
+              setLastDamageTaken(null);
 
               setTimeout(() => {
                 startGame();
@@ -444,6 +495,17 @@ export default function App() {
       });
 
       roomUnsubscribeRef.current = unsubscribe;
+
+      const attacksRef = ref(db, `rooms/${validId}/attacks`);
+      const unsubAttacks = onChildAdded(attacksRef, (snap) => {
+        const attack = snap.val();
+        if (attack && attack.to === myUid) {
+          handleIncomingAttack(attack.type);
+          remove(snap.ref).catch(() => {});
+        }
+      });
+      attacksUnsubscribeRef.current = unsubAttacks;
+
     } catch (error) {
       console.error(error);
       setMessage({ text: "CONNECTION FAILED", id: Date.now() });
@@ -475,12 +537,29 @@ export default function App() {
 
   const spawnNextKey = (previous = "") => {
     const next = pickRandomKey(previous || currentKey);
-    const fake = Math.random() < FAKE_KEY_CHANCE;
+    let fake = Math.random() < FAKE_KEY_CHANCE;
+
+    let fakeChance = FAKE_KEY_CHANCE;
+    if (fakeBoostChargesRef.current > 0) {
+      fakeChance = 0.50; // Boosted fake chance to 50%
+      fakeBoostChargesRef.current -= 1;
+    }
+
+    if (Math.random() < fakeChance) {
+      fake = true;
+    }
 
     setCurrentKey(next);
     setIsFake(fake);
     setReactionStart(Date.now());
     setSpawnId(Date.now());
+
+    let windowTime = getRoundWindow(score);
+    if (jamChargesRef.current > 0) {
+      windowTime = Math.max(500, windowTime - 150); // don't go below 500ms
+      jamChargesRef.current -= 1;
+    }
+    setActualRoundWindow(windowTime);
   };
 
   const beginPlay = () => {
@@ -541,6 +620,29 @@ export default function App() {
     setScreen("title");
   };
 
+  const sendAttack = (type) => {
+    if (gameMode !== "multi" || !myRoomId || !opponentUid) return;
+    
+    const attacksRef = ref(db, `rooms/${myRoomId}/attacks`);
+    push(attacksRef, {
+      to: opponentUid,
+      type: type,
+      timestamp: Date.now()
+    }).catch(() => {});
+
+    let msg = "";
+    if (type === "scoreBreak") msg = "ATTACK SENT: SCORE BREAK";
+    if (type === "timeJam") msg = "ATTACK SENT: TIME JAM";
+    if (type === "fakeBoost") msg = "ATTACK SENT: FAKE BOOST";
+    if (type === "overdrive") msg = "ATTACK SENT: OVERDRIVE";
+    
+    setMessage({ text: msg, type: "good", id: Date.now() });
+    setLastAttackSent(msg.split(": ")[1]);
+    
+    setEnemyHitAnim(true);
+    setTimeout(() => setEnemyHitAnim(false), 500);
+  };
+
   const handleCorrect = () => {
     const isRush = timeLeftRef.current <= 10;
     const rushMultiplier = isRush ? 1.5 : 1;
@@ -564,6 +666,13 @@ export default function App() {
     setCorrectCount((prev) => prev + 1);
     setTotalReaction((prev) => prev + reaction);
     setSuccessfulHits((prev) => prev + 1);
+
+    if (gameMode === "multi" && screen === "playing") {
+      if (nextCombo === 5) sendAttack("scoreBreak");
+      else if (nextCombo === 10) sendAttack("timeJam");
+      else if (nextCombo === 15) sendAttack("fakeBoost");
+      else if (nextCombo === 20) sendAttack("overdrive");
+    }
 
     if (nextCombo > 0) {
       if (nextCombo % 10 === 0) {
@@ -1112,21 +1221,43 @@ export default function App() {
                   )}
 
                   {gameMode === "multi" && opponentData && (
-                    <div className="side-card opponent-card">
+                    <div className={`side-card opponent-card ${enemyHitAnim ? "enemy-hit-anim" : ""}`}>
                       <div className="side-title">Enemy Protocol</div>
-                      <div className="feed-row">
-                        <span>Score</span>
-                        <span className="feed-strong">{opponentData.score}</span>
+                      <div className="feed-row" style={{ fontSize: "14px", marginTop: "4px" }}>
+                        <span>Status: <span className={opponentStatus === "disconnected" || opponentData.status === "dead" ? "feed-red" : ""}>{opponentStatus === "disconnected" ? "OFFL" : opponentData.status === "dead" ? "DEAD" : "ALV"}</span></span>
+                        <span>Score: <span className="feed-strong">{opponentData.score}</span></span>
                       </div>
-                      <div className="feed-row">
-                        <span>HP</span>
-                        <span className="feed-strong opponent-hp" style={{ letterSpacing: "0.05em", fontSize: "18px" }}>{"💛".repeat(Math.max(0, opponentData.lives))}</span>
+                      
+                      <div className="feed-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "4px", paddingBottom: "12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", width: "100%", fontSize: "14px" }}>
+                          <span>HP</span>
+                          <span className="feed-strong">{Math.max(0, opponentData.lives)}</span>
+                        </div>
+                        <div className="window-bar" style={{ height: "10px", marginTop: 0 }}>
+                          <div 
+                            className={`window-fill ${opponentData.lives <= 1 ? "danger" : ""}`}
+                            style={{ 
+                              width: `${(Math.max(0, opponentData.lives) / STARTING_LIVES) * 100}%`,
+                              background: opponentData.lives <= 1 ? "red" : "#22c55e",
+                              transition: "width 0.3s ease-out, background 0.3s"
+                            }} 
+                          />
+                        </div>
                       </div>
-                      <div className="feed-row">
-                        <span>Status</span>
-                        <span className={`feed-strong ${opponentStatus === "disconnected" || opponentData.status === "dead" ? "feed-red" : ""}`}>
-                          {opponentStatus === "disconnected" ? "OFFLINE" : opponentData.status === "dead" ? "DEAD" : "ALIVE"}
-                        </span>
+
+                      <div style={{ borderTop: "1px solid rgba(168, 85, 247, 0.3)", paddingTop: "12px", fontSize: "12px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "#9ca3af" }}>Sent ATK:</span>
+                          <span style={{ color: lastAttackSent ? "#fcd34d" : "#4b5563" }}>{lastAttackSent || "NONE"}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "#9ca3af" }}>Rcv'd ATK:</span>
+                          <span style={{ color: lastDamageTaken ? "#ef4444" : "#4b5563" }}>{lastDamageTaken || "NONE"}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", borderTop: "1px dashed rgba(168, 85, 247, 0.3)", paddingTop: "8px" }}>
+                          <span style={{ color: "#9ca3af" }}>Attack Charge:</span>
+                          <span style={{ color: "#a855f7", fontWeight: "bold" }}>{combo >= 20 ? "MAX" : combo % 5 + "/5 Cmb"}</span>
+                        </div>
                       </div>
                     </div>
                   )}

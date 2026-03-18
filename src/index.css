@@ -856,3 +856,14 @@ button {
   border-color: rgba(168, 85, 247, 1);
   box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
 }
+
+@keyframes enemyHit {
+  0% { transform: scale(1) translateX(0px); border-color: rgba(168, 85, 247, 0.3); box-shadow: none; background: rgba(0,0,0,0.6); }
+  30% { transform: scale(1.05) translateX(-5px); border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); background: rgba(239, 68, 68, 0.2); }
+  60% { transform: scale(1.05) translateX(5px); }
+  100% { transform: scale(1) translateX(0px); border-color: rgba(168, 85, 247, 0.3); box-shadow: none; background: rgba(0,0,0,0.6); }
+}
+
+.enemy-hit-anim {
+  animation: enemyHit 0.4s ease-out;
+}

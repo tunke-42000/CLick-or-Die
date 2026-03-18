@@ -174,7 +174,7 @@ function playTone({
   if (!ctx) return;
 
   if (ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
+    ctx.resume().catch(() => { });
   }
 
   const osc = ctx.createOscillator();
@@ -223,7 +223,7 @@ function playStartSound() {
   if (!ctx) return;
 
   if (ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
+    ctx.resume().catch(() => { });
   }
 
   playTone({ frequency: 440, duration: 0.05, type: "sine", volume: 0.025 });
@@ -236,7 +236,7 @@ function playGameOverSound() {
   if (!ctx) return;
 
   if (ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
+    ctx.resume().catch(() => { });
   }
 
   playTone({
@@ -265,7 +265,7 @@ function playFakeAvoidSound() {
   if (!ctx) return;
 
   if (ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
+    ctx.resume().catch(() => { });
   }
 
   // A fast, rising digital sweep to feel like "hacked avoided" or "trap evaded"
@@ -278,7 +278,7 @@ function playMilestoneSound() {
   if (!ctx) return;
 
   if (ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
+    ctx.resume().catch(() => { });
   }
 
   playTone({ frequency: 880, sweepTo: 1760, duration: 0.1, type: "sine", volume: 0.035 });
@@ -294,6 +294,14 @@ export default function App() {
   const [resultSaved, setResultSaved] = useState(false);
   const [timeLeft, setTimeLeft] = useState(GAME_TIME);
   const [lives, setLives] = useState(STARTING_LIVES);
+
+  const [gameMode, setGameMode] = useState("single");
+  const [roomIdInput, setRoomIdInput] = useState("");
+  const [myRoomId, setMyRoomId] = useState("");
+
+  const wsRef = useRef(null);
+  const [opponentData, setOpponentData] = useState(null);
+  const [opponentStatus, setOpponentStatus] = useState(null);
 
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
@@ -325,6 +333,67 @@ export default function App() {
   }, [isFake, roundWindow]);
 
   const nextRankInfo = getNextRankInfo(score);
+
+  const connectToRoom = (id) => {
+    if (!id.trim()) return;
+
+    setGameMode("multi");
+    setMyRoomId(id.toUpperCase());
+    setOpponentData(null);
+    setOpponentStatus("waiting");
+    setScreen("room_wait");
+    setMessage({ text: "CONNECTING...", id: Date.now() });
+
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    const ws = new WebSocket("ws://localhost:3001");
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "join", roomId: id.toUpperCase() }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "waiting") {
+          setOpponentStatus("waiting");
+          setMessage({ text: "WAITING FOR OPPONENT", id: Date.now() });
+        } else if (data.type === "matched") {
+          setOpponentStatus("matched");
+          setMessage({ text: "OPPONENT FOUND!", id: Date.now() });
+
+          setScore(0);
+          setTimeLeft(GAME_TIME);
+          timeLeftRef.current = GAME_TIME;
+          setLives(STARTING_LIVES);
+          setCombo(0);
+          setMaxCombo(0);
+          setCorrectCount(0);
+          setTotalReaction(0);
+          setSuccessfulHits(0);
+          setOpponentData({ score: 0, lives: STARTING_LIVES, status: "alive" });
+
+          setTimeout(() => {
+            startGame();
+          }, 1500);
+        } else if (data.type === "opponent_update") {
+          setOpponentData(data.payload);
+        } else if (data.type === "opponent_disconnected") {
+          setOpponentStatus("disconnected");
+        }
+      } catch (err) { }
+    };
+  };
+
+  const handleRematch = () => {
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: "rematch" }));
+      connectToRoom(myRoomId);
+    }
+  };
 
   const clearAllTimers = () => {
     if (roundTimeoutRef.current) {
@@ -418,7 +487,7 @@ export default function App() {
     const reaction = Date.now() - reactionStart;
     const nextCombo = combo + 1;
     const judgement = getJudgement(reaction);
-    
+
     // Uncapped combo points, max +15
     const baseComboBonus = Math.min(15, Math.floor(nextCombo / 2));
     const baseGained = 6 + baseComboBonus + judgement.bonus;
@@ -507,7 +576,7 @@ export default function App() {
       setCombo(nextCombo);
       setMaxCombo((prev) => Math.max(prev, nextCombo));
       setCorrectCount((prev) => prev + 1);
-      
+
       if (nextCombo > 0) {
         if (nextCombo % 10 === 0) {
           setComboMsg({ text: `${nextCombo} COMBO! +50`, type: "milestone", id: Date.now() });
@@ -521,7 +590,7 @@ export default function App() {
       setMessage({ text: "FAKE AVOID", id: Date.now() });
       setFlashType("fake-avoid");
       setAvoidedKey(currentKey);
-      
+
       setTimeout(() => setAvoidedKey(null), 350);
       spawnNextKey(currentKey);
       return;
@@ -543,6 +612,22 @@ export default function App() {
       return nextLives;
     });
   };
+
+  useEffect(() => {
+    if (gameMode === "multi" && screen === "playing" && wsRef.current?.readyState === 1) {
+      wsRef.current.send(JSON.stringify({
+        type: "state_update",
+        payload: { score, lives, status: lives <= 0 ? "dead" : "alive" }
+      }));
+    }
+  }, [score, lives, gameMode, screen]);
+
+  useEffect(() => {
+    if (screen === "playing" && gameMode === "multi" && opponentStatus === "disconnected") {
+      setMessage({ text: "OPPONENT DISCONNECTED", id: Date.now() });
+      setTimeout(() => endGame(), 1500);
+    }
+  }, [opponentStatus, screen, gameMode]);
 
   useEffect(() => {
     const audio = new Audio(clockTick);
@@ -571,10 +656,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (screen !== "result" || resultSaved) return;
+    if (screen !== "result" || resultSaved || gameMode === "multi") return;
     setTopScores((prev) => updateTopScores(prev, score));
     setResultSaved(true);
-  }, [screen, score, resultSaved]);
+  }, [screen, score, resultSaved, gameMode]);
 
   useEffect(() => {
     if (screen !== "countdown") return;
@@ -621,7 +706,7 @@ export default function App() {
     if (!audio) return;
 
     if (screen === "playing" && timeLeft <= 10 && timeLeft > 0) {
-      audio.play().catch(() => {});
+      audio.play().catch(() => { });
     } else {
       audio.pause();
       audio.currentTime = 0;
@@ -710,8 +795,8 @@ export default function App() {
   const shouldBump = message.text === "PERFECT" || message.text === "GREAT";
 
   return (
-    <div 
-      className={`app ${glitchAnim ? "glitch-shake" : ""}`} 
+    <div
+      className={`app ${glitchAnim ? "glitch-shake" : ""}`}
       onAnimationEnd={(e) => {
         if (e.animationName === "appGlitchShake") setGlitchAnim(0);
       }}
@@ -776,9 +861,57 @@ export default function App() {
                   </div>
                 </div>
 
-                <button className="start-btn" onClick={startGame}>
-                  Start
-                </button>
+                <div className="title-actions" style={{ display: "flex", gap: "16px", justifyContent: "center" }}>
+                  <button className="start-btn" onClick={() => { setGameMode("single"); startGame(); }}>
+                    Single Play
+                  </button>
+                  <button className="start-btn multi-btn" onClick={() => setScreen("room_input")} style={{ background: "#9333ea", borderColor: "#a855f7" }}>
+                    Online Battle
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {screen === "room_input" && (
+            <div className="center-screen">
+              <div className="panel room-panel">
+                <div className="warning">Online Protocol</div>
+                <h2 className="hero2" style={{ fontSize: "48px" }}>ROOM ACCESS</h2>
+                <input
+                  type="text"
+                  className="room-input"
+                  placeholder="Enter Room ID"
+                  value={roomIdInput}
+                  onChange={(e) => setRoomIdInput(e.target.value)}
+                  maxLength={10}
+                />
+                <div className="room-actions" style={{ marginTop: 24, display: "flex", gap: 16, justifyContent: "center" }}>
+                  <button className="start-btn multi-btn" style={{ background: "#9333ea", borderColor: "#a855f7" }} onClick={() => connectToRoom(roomIdInput)}>
+                    Connect
+                  </button>
+                  <button className="title-btn" onClick={goToTitle}>
+                    Back
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {screen === "room_wait" && (
+            <div className="center-screen">
+              <div className="panel room-panel">
+                <div className="warning">Connection</div>
+                <h2 className="hero2" style={{ fontSize: "36px" }}>{opponentStatus === "matched" ? "MATCHED!" : "WAITING..."}</h2>
+                <div className="room-id-display" style={{ fontSize: 24, letterSpacing: '0.2em' }}>Room ID: <span style={{ color: "#fcd34d" }}>{myRoomId}</span></div>
+
+                {opponentStatus === "waiting" && (
+                  <div style={{ marginTop: 32 }}>
+                    <button className="title-btn" onClick={() => { wsRef.current?.close(); goToTitle(); }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -843,7 +976,15 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="key-box-wrapper">
-                        <div className="rank-box">{getRank(score)}</div>
+                        {gameMode === "multi" ? (
+                          <div className="rank-box" style={{ fontSize: "48px", color: opponentStatus === "disconnected" ? "#93c5fd" : score > (opponentData?.score || 0) ? "#fcd34d" : score < (opponentData?.score || 0) ? "#ef4444" : "#d1d5db" }}>
+                            {opponentStatus === "disconnected" ? "WIN" :
+                              score > (opponentData?.score || 0) ? "WIN" :
+                                score < (opponentData?.score || 0) ? "LOSE" : "DRAW"}
+                          </div>
+                        ) : (
+                          <div className="rank-box">{getRank(score)}</div>
+                        )}
                       </div>
                     )}
 
@@ -859,9 +1000,8 @@ export default function App() {
                         </div>
                         <div className="window-bar">
                           <div
-                            className={`window-fill ${
-                              actualRoundWindow <= 1400 ? "danger" : ""
-                            }`}
+                            className={`window-fill ${actualRoundWindow <= 1400 ? "danger" : ""
+                              }`}
                             style={{ width: `${(actualRoundWindow / 2000) * 100}%` }}
                           />
                         </div>
@@ -893,7 +1033,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {screen === "playing" && (
+                  {screen === "playing" && gameMode === "single" && (
                     <div className="side-card">
                       <div className="side-title">Next Rank</div>
                       <div className="feed-row">
@@ -913,26 +1053,57 @@ export default function App() {
                     </div>
                   )}
 
+                  {gameMode === "multi" && opponentData && (
+                    <div className="side-card opponent-card">
+                      <div className="side-title">Enemy Protocol</div>
+                      <div className="feed-row">
+                        <span>Score</span>
+                        <span className="feed-strong">{opponentData.score}</span>
+                      </div>
+                      <div className="feed-row">
+                        <span>HP</span>
+                        <span className="feed-strong opponent-hp" style={{ letterSpacing: "0.05em", fontSize: "18px" }}>{"💛".repeat(Math.max(0, opponentData.lives))}</span>
+                      </div>
+                      <div className="feed-row">
+                        <span>Status</span>
+                        <span className={`feed-strong ${opponentStatus === "disconnected" || opponentData.status === "dead" ? "feed-red" : ""}`}>
+                          {opponentStatus === "disconnected" ? "OFFLINE" : opponentData.status === "dead" ? "DEAD" : "ALIVE"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {screen === "result" && (
                     <div className="side-card">
                       <div className="side-title">System Report</div>
                       <div className="feed-row">
-                        <span>Final Score</span>
+                        <span>My Score</span>
                         <span className="feed-strong">{score}</span>
                       </div>
-                      <div className="feed-row">
-                        <span>Rank</span>
-                        <span className="feed-strong feed-red">{getRank(score)}</span>
-                      </div>
-                      <div className="feed-row">
-                        <span>Top Score</span>
-                        <span className="feed-strong">{topScores[0]?.score ?? 0}</span>
-                      </div>
+
+                      {gameMode === "single" ? (
+                        <>
+                          <div className="feed-row">
+                            <span>Rank</span>
+                            <span className="feed-strong feed-red">{getRank(score)}</span>
+                          </div>
+                          <div className="feed-row">
+                            <span>Top Score</span>
+                            <span className="feed-strong">{topScores[0]?.score ?? 0}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="feed-row">
+                          <span>Enemy Score</span>
+                          <span className="feed-strong feed-red">{opponentData?.score || 0}</span>
+                        </div>
+                      )}
+
                       <div className="result-buttons">
-                        <button className="retry-btn" onClick={startGame}>
-                          Retry
+                        <button className="retry-btn" onClick={gameMode === "multi" ? handleRematch : startGame}>
+                          {gameMode === "multi" ? "Rematch" : "Retry"}
                         </button>
-                        <button className="title-btn" onClick={goToTitle}>
+                        <button className="title-btn" onClick={() => { wsRef.current?.close(); goToTitle(); }}>
                           Title
                         </button>
                       </div>

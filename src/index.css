@@ -1496,15 +1496,6 @@ button {
   font-size: 20px;
 }
 
-.shell.compact-mode .vs-hp-bar {
-  height: 12px;
-}
-
-.shell.compact-mode .vs-gauge-wrap {
-  height: 6px;
-  margin-top: -4px;
-}
-
 .shell.compact-mode .vs-time {
   font-size: 32px;
 }

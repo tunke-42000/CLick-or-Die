@@ -295,9 +295,9 @@ const TUTORIAL_STEPS = [
   { title: "STEP 3 / BATTLE RULE", lines: ["オンラインでは HP を削り合います", "相手より有利な状態で終われば勝利です"] },
   { title: "STEP 4 / ATTACK GAUGE", lines: ["正確に入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います"] },
   { title: "STEP 5 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "SPACEキーを押して発動してみましょう"] },
-  { title: "STEP 6 / FAKE JAM", lines: ["FAKE JAM は相手の妨害攻撃です", "受けると、次のキーが FAKE 化されます", "FAKE 化されたキーは押してはいけません", "何もしないでやり過ごしてください"] },
-  { title: "STEP 7 / SHIELD", lines: ["ゲージがMAXになると SHIELD を使えます", "次に受ける攻撃を1回だけ無効化します。SPACEキーで防御しましょう"] },
-  { title: "STEP 8 / WIN CONDITIONS", lines: ["勝利条件は以下の通りです", "1. 相手のHPを0にする", "2. 時間切れ時にHPが高い", "3. 同HPなら SCORE が高い"] },
+  { title: "STEP 6 / FAKE JAM", lines: ["FAKE JAM は相手の妨害攻撃です", "次に降ってくる2回のキーが紫のFAKEに化けます", "画面に「FAKE JAM INCOMING」と出たら警戒しましょう"] },
+  { title: "STEP 7 / SHIELD", lines: ["最大ゲージの SHIELD は攻防一体の最上位技です", "発動時に大ダメージを与え、次の攻撃を反射します", "発動してから敵の攻撃を反撃してみましょう"] },
+  { title: "STEP 8 / WIN CONDITIONS", lines: ["これで全スキルの説明は終わりです", "・正確に早くキーを押してゲージを貯める", "・攻撃や妨害で相手のHPを削る", "・反射バリアで身を守りつつカウンター", "以上の戦術を駆使して戦いましょう"] },
   { title: "STEP 9 / PRACTICE BATTLE", lines: ["最後に練習試合をしてみましょう", "学んだ操作を使って勝利を目指してください"] },
 ];
 
@@ -410,43 +410,64 @@ export default function App() {
   };
 
   const handleIncomingAttack = (type) => {
-    setHasShield(currentShield => {
-      if (currentShield) {
-        setCentralNotice({ text: "BLOCKED", type: "good", subtext: "Enemy attack nullified" });
-        addBattleLog("good", "Blocked Enemy Attack");
-        playFakeAvoidSound();
-        setShieldBreakAnim(true);
-        setTimeout(() => setShieldBreakAnim(false), 500);
-        return false;
-      }
+    if (hasShield) {
+      setHasShield(false);
+      setCentralNotice({ text: "REFLECTED", type: "good", subtext: "Enemy attack reflected!" });
+      addBattleLog("good", "Reflected Enemy Attack");
+      playFakeAvoidSound();
+      setShieldBreakAnim(true);
+      setTimeout(() => setShieldBreakAnim(false), 500);
 
-      switch (type) {
-        case "light":
-          setBattleHp(s => Math.max(0, s - 8));
-          setMessage({ text: "UNDER ATTACK: LIGHT -8", type: "bad", id: Date.now() });
-          setFlashType("trap");
-          setLastDamageTaken("LIGHT ATTACK");
-          setCentralNotice({ text: "LIGHT ATTACK HIT -8", type: "damage", subtext: "Enemy used Light Attack!" });
-          addBattleLog("damage", "Took 8 DMG from LIGHT ATTACK");
-          break;
-        case "fakejam":
-          setBattleHp(s => Math.max(0, s - 12));
-          fakeJamChargesRef.current += 2;
-          setMessage({ text: "SYSTEM JAMMED: FAKE JAM", type: "bad", id: Date.now() });
-          setFlashType("trap");
-          setGlitchAnim(1);
-          setLastDamageTaken("FAKE JAM");
-          setCentralNotice({ text: "FAKE JAM HIT -12", type: "critical", subtext: "Next 2 keys are FAKE" });
-          addBattleLog("critical", "Took 12 DMG and 2 Fakes from FAKE JAM");
+      sendAttack(type, "REFLECT: " + type.toUpperCase());
 
-          setShowSkull(true);
-          setTimeout(() => setShowSkull(false), 1000);
-          break;
-        default: break;
+      if (gameMode === "tutorial" && tutorialStep === 7) {
+        setTimeout(() => {
+          setOpponentData(prev => ({ ...prev, battleHp: Math.max(0, prev.battleHp - 8) }));
+          setEnemyHitAnim(true);
+          setTimeout(() => setEnemyHitAnim(false), 500);
+        }, 400);
       }
-      return currentShield;
-    });
-  }; const connectToRoom = async (id) => {
+      return;
+    }
+
+    switch (type) {
+      case "light":
+        setEnemyHitAnim(true);
+        setTimeout(() => setEnemyHitAnim(false), 500);
+        setBattleHp(s => Math.max(0, s - 8));
+        setMessage({ text: "UNDER ATTACK: LIGHT -8", type: "bad", id: Date.now() });
+        setFlashType("trap");
+        setLastDamageTaken("LIGHT ATTACK");
+        setCentralNotice({ text: "LIGHT ATTACK HIT -8", type: "damage", subtext: "Enemy used Light Attack!" });
+        addBattleLog("damage", "Took 8 DMG from LIGHT ATTACK");
+        break;
+      case "shield_attack":
+        setEnemyHitAnim(true);
+        setTimeout(() => setEnemyHitAnim(false), 500);
+        setBattleHp(s => Math.max(0, s - 15));
+        setMessage({ text: "UNDER ATTACK: SHIELD STRIKE -15", type: "bad", id: Date.now() });
+        setFlashType("trap");
+        setLastDamageTaken("SHIELD STRIKE");
+        setCentralNotice({ text: "HEAVY HIT -15", type: "damage", subtext: "Enemy deployed shield!" });
+        addBattleLog("damage", "Took 15 DMG from SHIELD STRIKE");
+        break;
+      case "fakejam":
+        setBattleHp(s => Math.max(0, s - 12));
+        fakeJamChargesRef.current += 2;
+        setMessage({ text: "SYSTEM JAMMED: FAKE JAM", type: "bad", id: Date.now() });
+        setFlashType("trap");
+        setGlitchAnim(1);
+        setLastDamageTaken("FAKE JAM");
+        setCentralNotice({ text: "FAKE JAM HIT -12", type: "critical", subtext: "Next 2 keys are FAKE" });
+        addBattleLog("critical", "Took 12 DMG and 2 Fakes from FAKE JAM");
+
+        setShowSkull(true);
+        setTimeout(() => setShowSkull(false), 1000);
+        break;
+    }
+  };
+
+  const connectToRoom = async (id) => {
     if (!id.trim() || !myUid) return;
 
     const validId = id.toUpperCase();
@@ -739,6 +760,9 @@ export default function App() {
           spawnNextKey(); // generates first fake key due to jam charges
         }, 1500);
       }, 1000);
+    } else if (tutorialStep === 5 || tutorialStep === 7) {
+      setTutorialPhase("play");
+      setCurrentKey("");
     }
   };
 
@@ -817,36 +841,51 @@ export default function App() {
         setOpponentData(prev => ({ ...prev, battleHp: prev.battleHp - 8 }));
         setTutorialPhase("success");
       } else if (tutorialStep === 7 && attackGauge >= 100) {
+        if (tutorialPhase !== "play") return;
         setAttackGauge(0);
         setHasShield(true);
         setShieldActivateAnim(true);
         setTimeout(() => setShieldActivateAnim(false), 800);
-        setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Next attack blocked" });
 
-        // Dummy enemy attacks shortly after
+        setCentralNotice({ text: "SHIELD DEPLOYED", type: "good", subtext: "ENEMY TOOK 15 DMG!" });
+        setOpponentData(prev => ({ ...prev, battleHp: Math.max(0, prev.battleHp - 15) }));
+        setEnemyHitAnim(true);
+        setTimeout(() => setEnemyHitAnim(false), 500);
+
         setTimeout(() => {
-          handleIncomingAttack("light");
-          setTimeout(() => setTutorialPhase("success"), 1000);
-        }, 1200);
+          setTutorialPhase("enemy_attack");
+          setCentralNotice({ text: "ENEMY ATTACKING", type: "damage", subtext: "Watch the shield reflect!" });
+          setTimeout(() => {
+            handleIncomingAttack("light");
+            setTimeout(() => {
+              setTutorialPhase("success");
+            }, 1000);
+          }, 1500);
+        }, 1500);
+        return;
       } else if (tutorialStep === 9 && attackGauge >= 20) {
         // Practice battle manual attack
         let type = "light"; let cost = 20; let msg = "LIGHT ATTACK";
-        if (attackGauge >= 100) { type = "shield"; cost = 100; msg = "SHIELD DEPLOYED"; }
-        else if (attackGauge >= 60) { type = "fakejam"; cost = 60; msg = "FAKE JAM"; }
+        let damage = 8;
+        if (attackGauge >= 100) { type = "shield_attack"; cost = 100; msg = "SHIELD DEPLOYED"; damage = 15; }
+        else if (attackGauge >= 60) { type = "fakejam"; cost = 60; msg = "FAKE JAM"; damage = 12; }
 
         setAttackGauge(prev => Math.max(0, prev - cost));
-        if (type === "shield") {
+        if (type === "shield_attack") {
           setHasShield(true);
           setShieldActivateAnim(true);
           setTimeout(() => setShieldActivateAnim(false), 800);
-          setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Next attack blocked" });
+          setCentralNotice({ text: "SHIELD DEPLOYED", type: "good", subtext: "Enemy took 15 DMG!" });
+          setOpponentData(prev => ({ ...prev, battleHp: Math.max(0, prev.battleHp - 15) }));
+          setEnemyHitAnim(true);
+          setTimeout(() => setEnemyHitAnim(false), 500);
         } else {
           setCentralNotice({ text: msg, type: type === "fakejam" ? "critical" : "attack", subtext: "Attack Success!" });
           setEnemyHitAnim(true);
           setTimeout(() => setEnemyHitAnim(false), 500);
           setOpponentData(prev => ({
             ...prev,
-            battleHp: Math.max(0, prev.battleHp - (type === "fakejam" ? 12 : 8)),
+            battleHp: Math.max(0, prev.battleHp - damage),
             fakeJamCharges: type === "fakejam" ? prev.fakeJamCharges + 2 : prev.fakeJamCharges
           }));
         }
@@ -860,8 +899,8 @@ export default function App() {
     let cost = 20;
     let msg = "ATTACK SENT: LIGHT";
 
-    if (attackGauge >= 100) {
-      type = "shield";
+    if (attackGauge >= 100 && !hasShield) {
+      type = "shield_attack";
       cost = 100;
       msg = "SHIELD DEPLOYED";
     } else if (attackGauge >= 60) {
@@ -876,13 +915,14 @@ export default function App() {
 
     setAttackGauge(prev => Math.max(0, prev - cost));
 
-    if (type === "shield") {
+    if (type === "shield_attack") {
       setHasShield(true);
       setShieldActivateAnim(true);
       setTimeout(() => setShieldActivateAnim(false), 800);
       setMessage({ text: msg, type: "good", id: Date.now() });
-      setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Next attack blocked" });
-      addBattleLog("good", "Deployed SHIELD");
+      setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Dealt 15 DMG & Block Ready" });
+      addBattleLog("good", "Deployed SHIELD & Dealt DMG");
+      sendAttack("shield_attack", msg);
     } else {
       sendAttack(type, msg);
     }
@@ -1442,7 +1482,7 @@ export default function App() {
       {flashType && <div className={`flash ${flashType}`} />}
       {shieldActivateAnim && <div className="shield-activate-popup" />}
       
-      <div className={`shell ${(screen === "playing" || screen === "tutorial") ? "compact-mode" : ""}`}>
+      <div className={`shell ${(screen === "playing" || screen === "tutorial" || screen === "result") ? "compact-mode" : ""}`}>
         <header className="header">
           <div>
             <div className={`eyebrow ${isRushTime ? "rush" : ""}`}>
@@ -1873,9 +1913,9 @@ export default function App() {
                         <div className="loadout-header">
                           <span className="loadout-cost">MAX</span>
                           <span className="loadout-name">SHIELD</span>
-                          <span className="loadout-tag shield">DEFEND</span>
+                          <span className="loadout-tag shield">COUNTER</span>
                         </div>
-                        <div className="loadout-desc">次に受ける相手の攻撃や妨害効果を1度だけ<br />完全に無効化する防御用バリアを展開する。</div>
+                        <div className="loadout-desc">発動時に大ダメージ（15HP）を与えつつ、<br />次に受ける攻撃をそのまま相手へ反射する。</div>
                       </div>
 
                       <div className="loadout-status">

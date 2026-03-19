@@ -1,0 +1,266 @@
+.counter {
+  font-size: 16px;
+  padding: 5px 10px;
+  margin-bottom: 24px;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  transition: border-color 0.3s;
+}
+
+.counter:hover {
+  border-color: var(--accent-border);
+}
+
+.counter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hero {
+  position: relative;
+}
+
+.hero .base,
+.hero .framework,
+.hero .vite {
+  inset-inline: 0;
+  margin: 0 auto;
+}
+
+.hero .base {
+  position: relative;
+  z-index: 0;
+  width: 170px;
+}
+
+.hero .framework,
+.hero .vite {
+  position: absolute;
+}
+
+.hero .framework {
+  top: 34px;
+  z-index: 1;
+  height: 28px;
+  transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg) scale(1.4);
+}
+
+.hero .vite {
+  top: 107px;
+  z-index: 0;
+  width: auto;
+  height: 26px;
+  transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg) scale(0.8);
+}
+
+#center {
+  display: flex;
+  flex-grow: 1;
+  flex-direction: column;
+  place-content: center;
+  place-items: center;
+  gap: 25px;
+}
+
+@media (max-width: 1024px) {
+  #center {
+    padding: 32px 20px 24px;
+    gap: 18px;
+  }
+}
+
+#next-steps {
+  display: flex;
+  text-align: left;
+  border-top: 1px solid var(--border);
+}
+
+#next-steps > div {
+  flex: 1 1 0;
+  padding: 32px;
+}
+
+@media (max-width: 1024px) {
+  #next-steps {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  #next-steps > div {
+    padding: 24px 20px;
+  }
+}
+
+#next-steps .icon {
+  width: 22px;
+  height: 22px;
+  margin-bottom: 16px;
+}
+
+#docs {
+  border-right: 1px solid var(--border);
+}
+
+@media (max-width: 1024px) {
+  #docs {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+#next-steps ul {
+  display: flex;
+  gap: 8px;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+#next-steps ul .logo {
+  height: 18px;
+}
+
+#next-steps ul a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: var(--text-h);
+  background: var(--social-bg);
+  text-decoration: none;
+  transition: box-shadow 0.3s;
+}
+
+#next-steps ul a:hover {
+  box-shadow: var(--shadow);
+}
+
+#next-steps ul a .button-icon {
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-width: 1024px) {
+  #next-steps ul {
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 20px;
+  }
+
+  #next-steps ul li {
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  #next-steps ul a {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+}
+
+#spacer {
+  height: 88px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 1024px) {
+  #spacer {
+    height: 48px;
+  }
+}
+
+.ticks {
+  position: relative;
+  width: 100%;
+}
+
+.ticks::before,
+.ticks::after {
+  content: "";
+  position: absolute;
+  top: -4.5px;
+  border: 5px solid transparent;
+}
+
+.ticks::before {
+  left: 0;
+  border-left-color: var(--border);
+}
+
+.ticks::after {
+  right: 0;
+  border-right-color: var(--border);
+}
+
+.stat-value.hearts {
+  font-size: 28px;
+  letter-spacing: 0.12em;
+  line-height: 1;
+}
+
+/* Top Scoreカード内にTop3を入れる用 */
+.stat-topscore {
+  text-align: left;
+}
+
+.topscore-inner {
+  margin-top: 10px;
+}
+
+.topscore-best {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+}
+
+.topscore-best-score,
+.topscore-best-rank {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  line-height: 1;
+}
+
+.topscore-best-score {
+  color: #fff;
+}
+
+.topscore-best-rank {
+  color: #f87171;
+  margin-left: 8px;
+}
+
+.topscore-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.topscore-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.topscore-rank {
+  min-width: 34px;
+  font-weight: 700;
+  color: #fca5a5;
+}
+
+.topscore-text {
+  word-break: break-word;
+}
+
+.topscore-empty {
+  margin-top: 12px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.55);
+}

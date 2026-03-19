@@ -369,10 +369,10 @@ button {
 }
 
 .game-grid {
-  display: grid;
-  gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   flex: 1;
-  grid-template-columns: 1.3fr 0.7fr;
 }
 
 .arena {
@@ -430,22 +430,22 @@ button {
 
 .key-box,
 .rank-box {
-  width: 288px;
-  height: 288px;
+  width: 200px;
+  height: 200px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 32px;
+  border-radius: 28px;
 }
 
 .key-box {
   border: 1px solid rgba(239, 68, 68, 0.5);
   background: rgba(0, 0, 0, 0.5);
   color: white;
-  font-size: 160px;
+  font-size: 110px;
   font-weight: 900;
-  letter-spacing: 0.15em;
-  box-shadow: 0 0 40px rgba(255, 0, 0, 0.15);
+  letter-spacing: 0.1em;
+  box-shadow: 0 0 30px rgba(255, 0, 0, 0.15);
 }
 
 .key-box.fake {
@@ -1620,4 +1620,157 @@ button {
 .shell.compact-mode .log-entry {
   padding: 4px 12px;
   font-size: 11px;
+}
+
+/* Mobile Redesign Styles */
+.mobile-hidden {
+  display: none !important;
+}
+
+.mobile-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding: 8px 0;
+  gap: 16px;
+  width: 100%;
+}
+
+.flick-pad-container {
+  flex: 1;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.flick-pad {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.flick-pad.active {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.flick-center {
+  font-size: 28px;
+  font-weight: bold;
+  color: white;
+  pointer-events: none;
+}
+
+.flick-dir {
+  position: absolute;
+  font-size: 20px;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  transition: all 0.2s;
+}
+
+.flick-dir.top { top: 12px; }
+.flick-dir.right { right: 12px; }
+.flick-dir.bottom { bottom: 12px; }
+.flick-dir.left { left: 12px; }
+
+.flick-dir.highlight {
+  color: #fcd34d;
+  transform: scale(1.3);
+  text-shadow: 0 0 10px rgba(252, 211, 77, 0.8);
+}
+
+.attack-button-container {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.attack-btn {
+  width: 140px;
+  height: 140px;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.5);
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.attack-label {
+  font-size: 16px;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+
+.attack-gauge-val {
+  font-size: 28px;
+}
+
+.attack-btn-disabled {
+  opacity: 0.5;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.attack-btn-light {
+  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
+  box-shadow: 0 0 20px rgba(147, 197, 253, 0.4);
+}
+.attack-btn-light:active {
+  background: rgba(59, 130, 246, 0.6);
+}
+
+.attack-btn-jam {
+  border-color: #d8b4fe;
+  background: rgba(168, 85, 247, 0.3);
+  color: white;
+  box-shadow: 0 0 20px rgba(216, 180, 254, 0.4);
+}
+.attack-btn-jam:active {
+  background: rgba(168, 85, 247, 0.6);
+}
+
+.attack-btn-shield {
+  border-color: #6ee7b7;
+  background: rgba(34, 197, 94, 0.3);
+  color: white;
+  box-shadow: 0 0 20px rgba(110, 231, 183, 0.4);
+}
+.attack-btn-shield:active {
+  background: rgba(34, 197, 94, 0.6);
+}
+
+/* Ensure body doesn't bounce/scroll on mobile during flick */
+body {
+  overscroll-behavior-y: contain;
+}
+
+.fake-warning-label {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fca5a5;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+  white-space: nowrap;
+  animation: txtPopSmall 0.3s ease-in-out alternate infinite;
+  z-index: 10;
 }

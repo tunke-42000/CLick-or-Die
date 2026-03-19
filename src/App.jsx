@@ -4,8 +4,10 @@ import { signInAnonymously } from "firebase/auth";
 import { ref, set, get, onValue, onDisconnect, update, remove, push, onChildAdded, serverTimestamp } from "firebase/database";
 import { auth, db } from "./firebase";
 import clockTick from "./clock-tick.mp3";
+import FlickPad from "./FlickPad";
+import AttackButton from "./AttackButton";
 
-const KEYS = ["A", "S", "D", "F", "J", "K", "L", "Q", "W", "E", "R", "U", "I", "O", "P"];
+const KEYS = ["あ", "い", "う", "え", "お"];
 const GAME_TIME = 60;
 const STARTING_LIVES = 5;
 const TOP_SCORES_KEY = "click-or-die-top3";
@@ -289,15 +291,15 @@ function playMilestoneSound() {
 }
 
 const TUTORIAL_STEPS = [
-  { title: "WELCOME TO CLICK OR DIE", lines: ["オンラインバトルの基本ルールを", "順番に体験しながら学びます"] },
-  { title: "STEP 1 / BASIC INPUT", lines: ["中央に表示されたキーを押してください", "まずは3回成功させましょう"] },
-  { title: "STEP 2 / FAKE KEY", lines: ["通常キーは押し、紫の異常なキー(FAKE)は", "押さずにやり過ごしてください", "FAKE を3回正しく無視できればクリアです"] },
+  { title: "WELCOME TO CLICK MOBILE ONLINE", lines: ["スマホ縦持ち特化のオンラインバトル！", "基本ルールを順番に体験して学びます"] },
+  { title: "STEP 1 / BASIC INPUT", lines: ["中央に表示される文字に合わせて", "画面下部のパッドを入力してください", "まずは「あ」を3回タップしましょう"] },
+  { title: "STEP 2 / FAKE TARGET", lines: ["通常は入力し、紫の異常な文字(FAKE)は", "操作せずにやり過ごしてください", "FAKEを3回正しく無視できればクリアです"] },
   { title: "STEP 3 / BATTLE RULE", lines: ["オンラインでは HP を削り合います", "相手より有利な状態で終われば勝利です"] },
-  { title: "STEP 4 / ATTACK GAUGE", lines: ["正確に入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います"] },
-  { title: "STEP 5 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "SPACEキーを押して発動してみましょう"] },
-  { title: "STEP 6 / FAKE JAM", lines: ["FAKE JAM は相手の妨害攻撃です", "次に降ってくる2回のキーが紫のFAKEに化けます", "画面に「FAKE JAM INCOMING」と出たら警戒しましょう"] },
-  { title: "STEP 7 / SHIELD ARMOR", lines: ["最大ゲージの SHIELD ARMOR は永続バフの最上位技です", "12ダメージを与え、自身の被ダメージを永続で8%軽減します", "重ね掛けで最大40%まで防御を強化できます。使ってみましょう"] },
-  { title: "STEP 8 / WIN CONDITIONS", lines: ["これで全スキルの説明は終わりです", "・正確に早くキーを押してゲージを貯める", "・攻撃や妨害で相手のHPを削る", "・永続バリア(ARMOR)で身を守りつつ戦う", "以上の戦術を駆使して勝利しましょう"] },
+  { title: "STEP 4 / ATTACK GAUGE", lines: ["正確にフリック入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います", "フリックで素早く入力してみましょう"] },
+  { title: "STEP 5 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "右下の ATTACK ボタンをタップして発動しましょう"] },
+  { title: "STEP 6 / FAKE JAM", lines: ["FAKE JAM は相手の妨害攻撃です", "次に降ってくる2回の文字が紫のFAKEに化けます", "画面に「FAKE JAM INCOMING」と出たら警戒しましょう"] },
+  { title: "STEP 7 / SHIELD ARMOR", lines: ["最大ゲージの SHIELD は永続バフの最上位技です", "12ダメージを与え、自身の被ダメージを永続で8%軽減します", "重ね掛けで最大40%！ボタンをタップして使ってみましょう"] },
+  { title: "STEP 8 / WIN CONDITIONS", lines: ["これで全スキルの説明は終わりです", "・正確なフリックでゲージを貯める", "・攻撃や妨害で相手のHPを削る", "・永続バリア(ARMOR)で身を守りつつ戦う", "以上の戦術を駆使して勝利を目指しましょう"] },
   { title: "STEP 9 / PRACTICE BATTLE", lines: ["最後に練習試合をしてみましょう", "学んだ操作を使って勝利を目指してください"] },
 ];
 
@@ -1404,39 +1406,23 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
+  const handleGameInput = (inputChar) => {
     if (screen !== "playing" && screen !== "tutorial") return;
+    if (!currentKey) return;
 
-    const onKeyDown = (e) => {
-      if (e.repeat) return;
-
-      if (e.code === "Space" && (gameMode === "multi" || gameMode === "tutorial") && (screen === "playing" || screen === "tutorial")) {
-        e.preventDefault();
-        manualAttackTrigger();
-        return;
-      }
-
-      const pressed = e.key.toUpperCase();
-      if (pressed.length !== 1) return;
-      if (!KEYS.includes(pressed)) return;
-
-      if (pressed === currentKey) {
-        if (isFake) {
-          if (gameMode === "tutorial") handleTutorialAction("fakehit");
-          else handleFakeHit();
-        } else {
-          if (gameMode === "tutorial") handleTutorialAction("correct");
-          else handleCorrect();
-        }
+    if (inputChar === currentKey) {
+      if (isFake) {
+        if (gameMode === "tutorial") handleTutorialAction("fakehit");
+        else handleFakeHit();
       } else {
-        if (gameMode === "tutorial") handleTutorialAction("wrong");
-        else handleWrong();
+        if (gameMode === "tutorial") handleTutorialAction("correct");
+        else handleCorrect();
       }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [screen, currentKey, isFake, combo, reactionStart, tutorialPhase, tutorialStep, tutorialTarget]);
+    } else {
+      if (gameMode === "tutorial") handleTutorialAction("wrong");
+      else handleWrong();
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -1479,7 +1465,7 @@ export default function App() {
             <div className={`eyebrow ${isRushTime ? "rush" : ""}`}>
               {isRushTime ? "FINAL RUSH // SCORE x1.5" : "Emergency Input Protocol"}
             </div>
-            <h1 className="title">CLICK OR DIE</h1>
+            <h1 className="title" style={{ fontSize: "clamp(24px, 4vw, 36px)", letterSpacing: "0.1em" }}>CLICK MOBILE ONLINE</h1>
           </div>
           <div className="badge">{screen === "playing" ? "Live" : "Standby"}</div>
         </header>
@@ -1490,11 +1476,11 @@ export default function App() {
               <div className="panel">
                 <div className="warning">Warning</div>
                 <h2 className="hero1">CLICK</h2>
-                <h2 className="hero2">OR DIE</h2>
+                <h2 className="hero2">MOBILE</h2>
 
                 <p className="desc">
-                  表示されたキーをすばやく押し続けろ。
-                  たまに出現するフェイクキーは押してはいけない
+                  表示された文字をフリックで素早く入力しろ。
+                  たまに出現するフェイクは触ってはいけない
                 </p>
 
                 <div className="title-actions" style={{ display: "flex", flexWrap: "wrap", gap: "16px", justifyContent: "center", margin: "40px auto 0", maxWidth: "600px" }}>
@@ -1656,9 +1642,9 @@ export default function App() {
                     else if (battleHp < eHp) { leadStatus = "LOSING"; leadClass = "losing"; }
 
                     const getNextAttackInfo = (gauge) => {
-                      if (gauge >= 100) return { label: "SPACE: SHIELD ARMOR", color: "#6ee7b7" };
-                      if (gauge >= 60) return { label: "SPACE: FAKE JAM", color: "#d8b4fe" };
-                      if (gauge >= 20) return { label: "SPACE: LIGHT ATTACK", color: "#93c5fd" };
+                      if (gauge >= 100) return { label: "TAP: SHIELD ARMOR", color: "#6ee7b7" };
+                      if (gauge >= 60) return { label: "TAP: FAKE JAM", color: "#d8b4fe" };
+                      if (gauge >= 20) return { label: "TAP: LIGHT ATTACK", color: "#93c5fd" };
                       return { label: "NEXT: LIGHT ATTACK", color: "#9ca3af" };
                     };
                     const getEnemyAttackInfo = (gauge) => {
@@ -1768,6 +1754,7 @@ export default function App() {
 
                     {(screen === "playing" || screen === "tutorial") ? (
                       <div className="key-box-wrapper">
+                        {isFake && <div className="fake-warning-label">DO NOT TOUCH</div>}
                         <div
                           key={spawnId}
                           className={`key-box ${isFake ? "fake" : ""} ${shouldBump ? "bump-anim" : ""} ${gameMode === "tutorial" && (tutorialStep === 2 || tutorialStep === 6) && isFake ? "tutorial-pulse" : ""}`}
@@ -1876,7 +1863,16 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="side">
+                {(screen === "playing" || (screen === "tutorial" && (tutorialPhase.includes("play") || tutorialPhase.includes("fake")))) && (
+                  <div className="mobile-controls-row">
+                    <FlickPad onInput={handleGameInput} />
+                    {(gameMode === "multi" || gameMode === "tutorial") && (
+                      <AttackButton gauge={attackGauge} onAttack={manualAttackTrigger} />
+                    )}
+                  </div>
+                )}
+
+                <div className="side mobile-hidden">
                   {(gameMode === "multi" || gameMode === "tutorial") ? (
                     <div className="side-card tactical-loadout">
                       <div className="side-title">TACTICAL LOADOUT</div>

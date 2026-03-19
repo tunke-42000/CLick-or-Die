@@ -291,15 +291,14 @@ function playMilestoneSound() {
 const TUTORIAL_STEPS = [
   { title: "WELCOME TO CLICK OR DIE", lines: ["オンラインバトルの基本ルールを", "順番に体験しながら学びます"] },
   { title: "STEP 1 / BASIC INPUT", lines: ["中央に表示されたキーを押してください", "まずは3回成功させましょう"] },
-  { title: "STEP 2 / MISS", lines: ["違うキーを押すと MISS になります", "まずはわざと違うキーを押してみましょう"] },
-  { title: "STEP 3 / FAKE KEY", lines: ["紫っぽい異常なキーは FAKE です", "FAKE は押さずに待つと回避できます。回避してみましょう"] },
-  { title: "STEP 4 / BATTLE RULE", lines: ["オンラインでは HP を削り合います", "相手より有利な状態で終われば勝利です"] },
-  { title: "STEP 5 / ATTACK GAUGE", lines: ["正確に入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います"] },
-  { title: "STEP 6 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "SPACEキーを押して発動してみましょう"] },
-  { title: "STEP 7 / FAKE JAM", lines: ["ゲージが60以上あると FAKE JAM が使えます", "ダメージに加えて相手にフェイクを付与します。SPACEキーで発動しましょう"] },
-  { title: "STEP 8 / SHIELD", lines: ["ゲージがMAXになると SHIELD を使えます", "次に受ける攻撃を1回だけ無効化します。SPACEキーで防御しましょう"] },
-  { title: "STEP 9 / WIN CONDITIONS", lines: ["勝利条件は以下の通りです", "1. 相手のHPを0にする", "2. 時間切れ時にHPが高い", "3. 同HPなら SCORE が高い"] },
-  { title: "STEP 10 / PRACTICE BATTLE", lines: ["最後に練習試合をしてみましょう", "学んだ操作を使って勝利を目指してください"] },
+  { title: "STEP 2 / FAKE KEY", lines: ["紫っぽい異常なキーは FAKE です", "FAKE は押さずに待つと回避できます。回避してみましょう"] },
+  { title: "STEP 3 / BATTLE RULE", lines: ["オンラインでは HP を削り合います", "相手より有利な状態で終われば勝利です"] },
+  { title: "STEP 4 / ATTACK GAUGE", lines: ["正確に入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います"] },
+  { title: "STEP 5 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "SPACEキーを押して発動してみましょう"] },
+  { title: "STEP 6 / FAKE JAM", lines: ["FAKE JAM は相手の妨害攻撃です", "受けると、次のキーが FAKE 化されます", "FAKE 化されたキーは押してはいけません", "何もしないでやり過ごしてください"] },
+  { title: "STEP 7 / SHIELD", lines: ["ゲージがMAXになると SHIELD を使えます", "次に受ける攻撃を1回だけ無効化します。SPACEキーで防御しましょう"] },
+  { title: "STEP 8 / WIN CONDITIONS", lines: ["勝利条件は以下の通りです", "1. 相手のHPを0にする", "2. 時間切れ時にHPが高い", "3. 同HPなら SCORE が高い"] },
+  { title: "STEP 9 / PRACTICE BATTLE", lines: ["最後に練習試合をしてみましょう", "学んだ操作を使って勝利を目指してください"] },
 ];
 
 export default function App() {
@@ -702,11 +701,10 @@ export default function App() {
     setHasShield(false);
     fakeJamChargesRef.current = 0;
     setOpponentData({ battleHp: 60, attackGauge: 0, hasShield: false, fakeJamCharges: 0, score: 0 });
-    
-    if (next === 6) setAttackGauge(20);
-    if (next === 7) setAttackGauge(60);
-    if (next === 8) setAttackGauge(100);
-    if (next === 10) {
+    if (next === 5) setAttackGauge(20);
+    if (next === 6) setAttackGauge(0);
+    if (next === 7) setAttackGauge(100);
+    if (next === 9) {
       setTimeLeft(GAME_TIME);
       timeLeftRef.current = GAME_TIME;
     } else {
@@ -718,13 +716,25 @@ export default function App() {
   };
 
   const startTutorialPhase = () => {
-    setTutorialPhase("play");
     setTutorialTarget(0);
-    if (tutorialStep === 1 || tutorialStep === 2 || tutorialStep === 5 || tutorialStep === 10) {
+    if (tutorialStep === 1 || tutorialStep === 4 || tutorialStep === 9) {
+      setTutorialPhase("play");
       spawnNextKey();
-    } else if (tutorialStep === 3) {
+    } else if (tutorialStep === 2) {
+      setTutorialPhase("play");
       spawnNextKey();
       setIsFake(true);
+    } else if (tutorialStep === 6) {
+      setTutorialPhase("enemy_fakejam_attack");
+      setTimeout(() => {
+        setCentralNotice({ text: "妨害を受けました", type: "critical", subtext: "ENEMY USED FAKE JAM" });
+        handleIncomingAttack("fakejam");
+        setTimeout(() => {
+          setTutorialPhase("fake_key_active");
+          setCentralNotice({ text: "FAKE JAM INCOMING", type: "critical", subtext: "このキーは押さない！" });
+          spawnNextKey(); // generates first fake key due to jam charges
+        }, 1500);
+      }, 1000);
     }
   };
 
@@ -795,21 +805,14 @@ export default function App() {
   const manualAttackTrigger = () => {
     if (gameMode === "tutorial") {
       if (tutorialPhase !== "play") return;
-      if (tutorialStep === 6 && attackGauge >= 20) {
+      if (tutorialStep === 5 && attackGauge >= 20) {
         setAttackGauge(0);
         setCentralNotice({ text: "LIGHT ATTACK", type: "attack", subtext: "Attack Success!" });
         setEnemyHitAnim(true);
         setTimeout(() => setEnemyHitAnim(false), 500);
         setOpponentData(prev => ({ ...prev, battleHp: prev.battleHp - 8 }));
         setTutorialPhase("success");
-      } else if (tutorialStep === 7 && attackGauge >= 60) {
-        setAttackGauge(0);
-        setCentralNotice({ text: "FAKE JAM", type: "critical", subtext: "Attack Success!" });
-        setEnemyHitAnim(true);
-        setTimeout(() => setEnemyHitAnim(false), 500);
-        setOpponentData(prev => ({ ...prev, battleHp: prev.battleHp - 12, fakeJamCharges: prev.fakeJamCharges + 2 }));
-        setTutorialPhase("success");
-      } else if (tutorialStep === 8 && attackGauge >= 100) {
+      } else if (tutorialStep === 7 && attackGauge >= 100) {
         setAttackGauge(0);
         setHasShield(true);
         setShieldActivateAnim(true);
@@ -821,7 +824,7 @@ export default function App() {
           handleIncomingAttack("light");
           setTimeout(() => setTutorialPhase("success"), 1000);
         }, 1200);
-      } else if (tutorialStep === 10 && attackGauge >= 20) {
+      } else if (tutorialStep === 9 && attackGauge >= 20) {
         // Practice battle manual attack
         let type = "light"; let cost = 20; let msg = "LIGHT ATTACK";
         if (attackGauge >= 100) { type = "shield"; cost = 100; msg = "SHIELD DEPLOYED"; }
@@ -1235,7 +1238,7 @@ export default function App() {
   }, [centralNotice]);
 
   const handleTutorialAction = (action) => {
-    if (tutorialPhase !== "play") return;
+    if (tutorialPhase !== "play" && tutorialPhase !== "fake_key_active") return;
 
     if (action === "correct") {
       playSuccessSound();
@@ -1251,14 +1254,7 @@ export default function App() {
         } else {
           spawnNextKey();
         }
-      } else if (tutorialStep === 2) {
-        if (tutorialTarget === 1) { // Already missed once
-          setTutorialPhase("success");
-          setCurrentKey("");
-        } else {
-          spawnNextKey(); // Hit before missing, weird but ok
-        }
-      } else if (tutorialStep === 5) {
+      } else if (tutorialStep === 4) {
         setAttackGauge(prev => {
           const next = Math.min(100, prev + 25);
           if (next >= 100) {
@@ -1268,7 +1264,7 @@ export default function App() {
           return next;
         });
         if (tutorialPhase !== "success") spawnNextKey();
-      } else if (tutorialStep === 10) {
+      } else if (tutorialStep === 9) {
         setCombo(prev => prev + 1);
         setAttackGauge(prev => Math.min(100, prev + 8));
         spawnNextKey();
@@ -1280,16 +1276,23 @@ export default function App() {
       setMessage({ text: "MISS", id: Date.now() });
       setFlashType("miss");
       
-      if (tutorialStep === 2) {
-        if (tutorialTarget === 0) {
-          setTutorialTarget(1);
-          setCentralNotice({ text: "MISS PENALTY", type: "bad", subtext: "Now hit the correct key" });
-        }
-      } else if (tutorialStep === 10) {
+      if (tutorialStep === 6 && tutorialPhase === "fake_key_active") {
+        setTutorialPhase("retry_wait");
+        setCentralNotice({ text: "FAILED", type: "bad", subtext: "今の FAKE キーは押してはいけません" });
+        setTimeout(() => {
+          setTutorialPhase("fake_key_active");
+          setCentralNotice({ text: "RETRY", type: "critical", subtext: "THIS KEY IS FAKE" });
+          fakeJamChargesRef.current = 1;
+          spawnNextKey();
+        }, 2500);
+        setCurrentKey("");
+      } else if (tutorialStep === 9) {
         setCombo(0);
         setAttackGauge(prev => Math.max(0, prev - 8));
+        spawnNextKey(currentKey);
+      } else {
+        spawnNextKey(currentKey);
       }
-      spawnNextKey(currentKey);
     } else if (action === "timeout") {
       if (isFake) {
         playFakeAvoidSound();
@@ -1298,11 +1301,25 @@ export default function App() {
         setAvoidedKey(currentKey);
         setTimeout(() => setAvoidedKey(null), 350);
         
-        if (tutorialStep === 3) {
+        if (tutorialStep === 2) {
           setTutorialPhase("success");
           setCurrentKey("");
           return;
-        } else if (tutorialStep === 10) {
+        } else if (tutorialStep === 6) {
+          if (tutorialTarget === 0) {
+            setTutorialTarget(1);
+            setCentralNotice({ text: "FAKE AVOIDED", type: "good", subtext: "もう1回 FAKE キーが来ます" });
+            spawnNextKey();
+          } else {
+             setTutorialPhase("fake_avoid_success");
+             setCentralNotice({ text: "FAKE JAM EVADED", type: "good", subtext: "妨害を正しく回避しました" });
+             setTimeout(() => {
+               setTutorialPhase("success");
+             }, 2000);
+             setCurrentKey("");
+          }
+          return;
+        } else if (tutorialStep === 9) {
           setAttackGauge(prev => Math.min(100, prev + 8));
         }
         spawnNextKey();
@@ -1310,7 +1327,7 @@ export default function App() {
         playMissSound();
         setMessage({ text: "TOO SLOW", id: Date.now() });
         setFlashType("miss");
-        if (tutorialStep === 10) setCombo(0);
+        if (tutorialStep === 9) setCombo(0);
         spawnNextKey(currentKey);
       }
     } else if (action === "fakehit") {
@@ -1318,11 +1335,23 @@ export default function App() {
       setMessage({ text: "TRAP", id: Date.now() });
       setFlashType("trap");
       setGlitchAnim(Date.now());
-      if (tutorialStep === 10) {
+      if (tutorialStep === 6 && tutorialPhase === "fake_key_active") {
+        setTutorialPhase("retry_wait");
+        setCentralNotice({ text: "FAILED", type: "bad", subtext: "今の FAKE キーは押してはいけません" });
+        setTimeout(() => {
+          setTutorialPhase("fake_key_active");
+          setCentralNotice({ text: "RETRY", type: "critical", subtext: "THIS KEY IS FAKE" });
+          fakeJamChargesRef.current = 1;
+          spawnNextKey();
+        }, 2500);
+        setCurrentKey("");
+      } else if (tutorialStep === 9) {
         setCombo(0);
         setAttackGauge(prev => Math.max(0, prev - 10));
+        spawnNextKey();
+      } else {
+        spawnNextKey();
       }
-      spawnNextKey();
     }
   };
 
@@ -1549,8 +1578,8 @@ export default function App() {
                     {TUTORIAL_STEPS[tutorialStep].lines.map((l, i) => <p key={i} style={{ margin: 0 }}>{l}</p>)}
                   </div>
                   {tutorialPhase === "intro" && (
-                    <button className="start-btn tutorial-next-btn" onClick={tutorialStep === 0 || tutorialStep === 4 || tutorialStep === 9 ? advanceTutorial : startTutorialPhase} style={{ padding: '12px 32px', fontSize: 16 }}>
-                      {tutorialStep === 0 || tutorialStep === 4 || tutorialStep === 9 ? "NEXT STEP" : "START"}
+                    <button className="start-btn tutorial-next-btn" onClick={tutorialStep === 0 || tutorialStep === 3 || tutorialStep === 8 ? advanceTutorial : startTutorialPhase} style={{ padding: '12px 32px', fontSize: 16 }}>
+                      {tutorialStep === 0 || tutorialStep === 3 || tutorialStep === 8 ? "NEXT STEP" : "START"}
                     </button>
                   )}
                   {tutorialPhase === "success" && (
@@ -1593,13 +1622,13 @@ export default function App() {
                       <>
                         <div className="vs-player">
                           <div className="vs-name">YOU</div>
-                          <div className={`vs-hp-bar ${gameMode === "tutorial" && tutorialStep === 4 ? "tutorial-pulse" : ""}`}>
+                          <div className={`vs-hp-bar ${gameMode === "tutorial" && tutorialStep === 3 ? "tutorial-pulse" : ""}`}>
                             {hasShield && <div className="shield-overlay" />}
                             {fakeJamChargesRef.current > 0 && <div className="jam-overlay player-jam" />}
                             <div className="vs-hp-fill" style={{ width: `${Math.max(0, Math.min(100, (battleHp/60)*100))}%`, background: battleHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, battleHp)}</div>
-                          <div className={`vs-gauge-wrap ${gameMode === "tutorial" && tutorialStep === 5 ? "tutorial-pulse" : ""}`}>
+                          <div className={`vs-gauge-wrap ${gameMode === "tutorial" && tutorialStep === 4 ? "tutorial-pulse" : ""}`}>
                             <div className="vs-gauge-bg">
                               <div className={`vs-gauge-fill tier-${getTierClass(attackGauge)}`} style={{ width: `${Math.max(0, Math.min(100, attackGauge))}%` }} />
                               <div className="gauge-marker" style={{ left: "20%" }} />
@@ -1664,7 +1693,7 @@ export default function App() {
                     <div className="skull-popup">☠</div>
                   )}
                   <div
-                    className={`arena-inner ${(isDanger && screen === "playing") || (tutorialPhase === "play" && tutorialStep === 10 && isDanger) ? "danger" : ""} ${isZone ? "zone" : ""}`}
+                    className={`arena-inner ${(isDanger && screen === "playing") || (tutorialPhase === "play" && tutorialStep === 9 && isDanger) ? "danger" : ""} ${isZone ? "zone" : ""}`}
                   />
 
                   <div className="target-wrap">
@@ -1688,7 +1717,7 @@ export default function App() {
                       <div className="key-box-wrapper">
                         <div
                           key={spawnId}
-                          className={`key-box ${isFake ? "fake" : ""} ${shouldBump ? "bump-anim" : ""} ${gameMode === "tutorial" && tutorialStep === 3 && isFake ? "tutorial-pulse" : ""} ${gameMode === "tutorial" && tutorialStep === 2 && tutorialTarget === 0 ? "tutorial-pulse-red" : ""}`}
+                          className={`key-box ${isFake ? "fake" : ""} ${shouldBump ? "bump-anim" : ""} ${gameMode === "tutorial" && (tutorialStep === 2 || tutorialStep === 6) && isFake ? "tutorial-pulse" : ""}`}
                           data-text={currentKey}
                         >
                           {currentKey}
@@ -1766,7 +1795,7 @@ export default function App() {
                       {(screen === "playing" || screen === "tutorial") ? message.text : "Final Rank"}
                     </div>
 
-                    {(screen === "playing" || (screen === "tutorial" && tutorialStep === 10)) && (
+                    {(screen === "playing" || (screen === "tutorial" && tutorialStep === 9)) && (
                       <div className="window-wrap">
                         <div className="window-head">
                           <span>入力制限時間</span>
@@ -1799,7 +1828,7 @@ export default function App() {
                     <div className="side-card tactical-loadout">
                       <div className="side-title">TACTICAL LOADOUT</div>
                       
-                      <div className={`loadout-item ${attackGauge >= 60 ? "available" : attackGauge >= 20 ? "ready light-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 6 && attackGauge >= 20 ? "tutorial-pulse" : ""}`}>
+                      <div className={`loadout-item ${attackGauge >= 60 ? "available" : attackGauge >= 20 ? "ready light-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 5 && attackGauge >= 20 ? "tutorial-pulse" : ""}`}>
                         <div className="loadout-header">
                           <span className="loadout-cost">20G</span>
                           <span className="loadout-name">LIGHT ATTACK</span>
@@ -1808,7 +1837,7 @@ export default function App() {
                         <div className="loadout-desc">確実な小ダメージ（8HP）を与える基本攻撃。<br/>消費が軽く、連発での牽制や削りに最適。</div>
                       </div>
 
-                      <div className={`loadout-item ${attackGauge >= 100 ? "available" : attackGauge >= 60 ? "ready jam-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 7 && attackGauge >= 60 ? "tutorial-pulse" : ""}`}>
+                      <div className={`loadout-item ${attackGauge >= 100 ? "available" : attackGauge >= 60 ? "ready jam-ready" : "locked"}`}>
                         <div className="loadout-header">
                           <span className="loadout-cost">60G</span>
                           <span className="loadout-name">FAKE JAM</span>
@@ -1817,7 +1846,7 @@ export default function App() {
                         <div className="loadout-desc">ダメージ（12HP）に加え、相手の次の2連続キー<br/>を強制的にフェイク化してリズムを崩す。</div>
                       </div>
 
-                      <div className={`loadout-item ${attackGauge >= 100 ? "ready shield-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 8 && attackGauge >= 100 ? "tutorial-pulse" : ""}`}>
+                      <div className={`loadout-item ${attackGauge >= 100 ? "ready shield-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 7 && attackGauge >= 100 ? "tutorial-pulse" : ""}`}>
                         <div className="loadout-header">
                           <span className="loadout-cost">MAX</span>
                           <span className="loadout-name">SHIELD</span>

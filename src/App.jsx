@@ -318,6 +318,7 @@ export default function App() {
 
   const jamChargesRef = useRef(0);
   const fakeBoostChargesRef = useRef(0);
+  const gaugePenaltyRef = useRef(0);
   const [lastAttackSent, setLastAttackSent] = useState(null);
   const [lastDamageTaken, setLastDamageTaken] = useState(null);
   const [enemyHitAnim, setEnemyHitAnim] = useState(false);
@@ -397,35 +398,26 @@ export default function App() {
         addLog("Took 8 DMG from LIGHT ATTACK", "damage");
         break;
       case "normal":
-        setBattleHp(s => Math.max(0, s - 18));
+        setBattleHp(s => Math.max(0, s - 25));
         setScore(s => Math.max(0, s - 5));
         setMessage({ text: "SYSTEM DAMAGED: NORMAL ATTACK", type: "bad", id: Date.now() });
         setFlashType("trap");
         setGlitchAnim((prev) => prev + 1);
         setLastDamageTaken("NORMAL ATTACK");
-        setCentralNotice({ text: "NORMAL ATTACK HIT -18", type: "damage", subtext: "Enemy used Normal Attack!" });
-        addLog("Took 18 DMG from NORMAL ATTACK", "damage");
-        break;
-      case "heavy":
-        setBattleHp(s => Math.max(0, s - 30));
-        jamChargesRef.current += 2;
-        setMessage({ text: "SYSTEM JAMMED: HEAVY ATTACK!", type: "bad", id: Date.now() });
-        setFlashType("trap");
-        setGlitchAnim((prev) => prev + 1);
-        setLastDamageTaken("HEAVY ATTACK");
-        setCentralNotice({ text: "HEAVY ATTACK HIT -30", type: "damage", subtext: "Input speed penalized!" });
-        addLog("Took 30 DMG from HEAVY ATTACK", "damage");
+        setCentralNotice({ text: "NORMAL ATTACK HIT -25", type: "damage", subtext: "Enemy used Normal Attack!" });
+        addLog("Took 25 DMG from NORMAL ATTACK", "damage");
         break;
       case "finisher":
-        setBattleHp(s => Math.max(0, s - 45));
-        fakeBoostChargesRef.current += 2;
+        setBattleHp(s => Math.max(0, s - 40));
+        fakeBoostChargesRef.current += 3;
+        jamChargesRef.current += 2;
         setMessage({ text: "CRITICAL: FINISHER HIT!", type: "bad", id: Date.now() });
         setFlashType("trap");
         setGlitchAnim(2);
         playTone({ frequency: 150, sweepTo: 50, duration: 0.8, type: "sawtooth", volume: 0.1 });
         setLastDamageTaken("FINISHER");
-        setCentralNotice({ text: "FINISHER HIT -45", type: "critical", subtext: "Critical Damage!" });
-        addLog("Took 45 DMG from FINISHER", "critical");
+        setCentralNotice({ text: "FINISHER HIT -40", type: "critical", subtext: "Critical Damage & System Jam!" });
+        addLog("Took 40 DMG from FINISHER", "critical");
         break;
       default: break;
     }
@@ -511,6 +503,7 @@ export default function App() {
               setSuccessfulHits(0);
               jamChargesRef.current = 0;
               fakeBoostChargesRef.current = 0;
+              gaugePenaltyRef.current = 0;
               setLastAttackSent(null);
               setLastDamageTaken(null);
               setBattleLog([]);
@@ -682,24 +675,25 @@ export default function App() {
   };
 
   const manualAttackTrigger = () => {
-    if (gameMode !== "multi" || attackGauge < 25) return;
+    if (gameMode !== "multi" || attackGauge < 20) return;
     
     let type = "light";
-    let cost = 25;
+    let cost = 20;
     let msg = "ATTACK SENT: LIGHT ATTACK";
 
     if (attackGauge >= 100) {
       type = "finisher";
       cost = 100;
       msg = "ATTACK SENT: FINISHER";
-    } else if (attackGauge >= 75) {
-      type = "heavy";
-      cost = 75;
-      msg = "ATTACK SENT: HEAVY ATTACK";
-    } else if (attackGauge >= 50) {
+      gaugePenaltyRef.current += 5;
+    } else if (attackGauge >= 60) {
       type = "normal";
-      cost = 50;
+      cost = 60;
       msg = "ATTACK SENT: NORMAL ATTACK";
+    } else if (attackGauge >= 20) {
+      type = "light";
+      cost = 20;
+      msg = "ATTACK SENT: LIGHT ATTACK";
     }
 
     setAttackGauge(prev => Math.max(0, prev - cost));
@@ -738,14 +732,19 @@ export default function App() {
 
     if (gameMode === "multi") {
       let g = 0;
-      if (judgement.msg === "PERFECT") g = 12;
-      else if (judgement.msg === "GREAT") g = 9;
-      else if (judgement.msg === "GOOD") g = 6;
+      if (judgement.label === "PERFECT") g = 12;
+      else if (judgement.label === "GREAT") g = 9;
+      else if (judgement.label === "GOOD") g = 6;
       else g = 3;
 
       if (nextCombo >= 20) g += 3;
       else if (nextCombo >= 10) g += 2;
       else if (nextCombo >= 5) g += 1;
+
+      if (gaugePenaltyRef.current > 0) {
+        g = Math.floor(g / 2);
+        gaugePenaltyRef.current -= 1;
+      }
 
       addGauge(g);
     }
@@ -913,10 +912,14 @@ export default function App() {
   }, [score, battleHp, attackGauge, lives, gameMode, screen, myUid]);
 
   useEffect(() => {
-    if (gameMode === "multi" && screen === "playing" && battleHp <= 0) {
-      endGame();
+    if (gameMode === "multi" && screen === "playing") {
+      if (battleHp <= 0) {
+        endGame();
+      } else if (opponentData && opponentData.battleHp <= 0) {
+        endGame();
+      }
     }
-  }, [battleHp, screen, gameMode]);
+  }, [battleHp, opponentData, screen, gameMode]);
 
   useEffect(() => {
     if (screen === "playing" && gameMode === "multi" && opponentStatus === "disconnected") {
@@ -1194,10 +1197,10 @@ export default function App() {
                 </div>
 
                 <div className="title-actions" style={{ display: "flex", gap: "16px", justifyContent: "center", marginTop: "24px" }}>
-                  <button className="start-btn" onClick={() => startGame()}>
+                  <button className="start-btn" style={{ flex: 1, minWidth: 0, padding: "18px 24px" }} onClick={() => startGame()}>
                     Start Mission
                   </button>
-                  <button className="title-btn" onClick={goToTitle}>
+                  <button className="title-btn" style={{ flex: 1, minWidth: 0, padding: "18px 24px", fontSize: "16px" }} onClick={goToTitle}>
                     Back
                   </button>
                 </div>
@@ -1219,10 +1222,10 @@ export default function App() {
                   maxLength={10}
                 />
                 <div className="room-actions" style={{ marginTop: 24, display: "flex", gap: 16, justifyContent: "center" }}>
-                  <button className="start-btn multi-btn" style={{ background: "#9333ea", borderColor: "#a855f7" }} onClick={() => connectToRoom(roomIdInput)}>
+                  <button className="start-btn multi-btn" style={{ flex: 1, minWidth: 0, padding: "18px 24px", background: "#9333ea", borderColor: "#a855f7" }} onClick={() => connectToRoom(roomIdInput)}>
                     Connect
                   </button>
-                  <button className="title-btn" onClick={goToTitle}>
+                  <button className="title-btn" style={{ flex: 1, minWidth: 0, padding: "18px 24px", fontSize: "16px" }} onClick={goToTitle}>
                     Back
                   </button>
                 </div>
@@ -1268,20 +1271,20 @@ export default function App() {
                     
                     const getNextAttackInfo = (gauge) => {
                       if (gauge >= 100) return { label: "SPACE: FINISHER", color: "#ef4444" };
-                      if (gauge >= 75) return { label: "SPACE: HEAVY ATTACK", color: "#d8b4fe" };
-                      if (gauge >= 50) return { label: "SPACE: NORMAL ATTACK", color: "#fcd34d" };
-                      if (gauge >= 25) return { label: "SPACE: LIGHT ATTACK", color: "#93c5fd" };
+                      if (gauge >= 60) return { label: "SPACE: NORMAL ATTACK", color: "#fcd34d" };
+                      if (gauge >= 20) return { label: "SPACE: LIGHT ATTACK", color: "#93c5fd" };
                       return { label: "NEXT: LIGHT ATTACK", color: "#9ca3af" };
                     };
                     const getEnemyAttackInfo = (gauge) => {
                       if (gauge >= 100) return { label: "READY: FINISHER", color: "#ef4444" };
-                      if (gauge >= 75) return { label: "READY: HEAVY ATTACK", color: "#d8b4fe" };
-                      if (gauge >= 50) return { label: "READY: NORMAL ATTACK", color: "#fcd34d" };
-                      if (gauge >= 25) return { label: "READY: LIGHT ATTACK", color: "#93c5fd" };
+                      if (gauge >= 60) return { label: "READY: NORMAL ATTACK", color: "#fcd34d" };
+                      if (gauge >= 20) return { label: "READY: LIGHT ATTACK", color: "#93c5fd" };
                       return { label: "NEXT: LIGHT ATTACK", color: "#9ca3af" };
                     };
                     const myAttackInfo = getNextAttackInfo(attackGauge);
                     const enemyAttackInfo = getEnemyAttackInfo(eGauge);
+
+                    const getTierClass = (gauge) => gauge >= 100 ? 3 : gauge >= 60 ? 2 : gauge >= 20 ? 1 : 0;
 
                     return (
                       <>
@@ -1293,12 +1296,11 @@ export default function App() {
                           <div className="vs-hp-val">{Math.max(0, battleHp)}</div>
                           <div className="vs-gauge-wrap">
                             <div className="vs-gauge-bg">
-                              <div className={`vs-gauge-fill tier-${Math.floor(attackGauge/25)}`} style={{ width: `${Math.max(0, Math.min(100, attackGauge))}%` }} />
-                              <div className="gauge-marker" style={{ left: "25%" }} />
-                              <div className="gauge-marker" style={{ left: "50%" }} />
-                              <div className="gauge-marker" style={{ left: "75%" }} />
+                              <div className={`vs-gauge-fill tier-${getTierClass(attackGauge)}`} style={{ width: `${Math.max(0, Math.min(100, attackGauge))}%` }} />
+                              <div className="gauge-marker" style={{ left: "20%" }} />
+                              <div className="gauge-marker" style={{ left: "60%" }} />
                             </div>
-                            <div className="vs-gauge-label" style={{ color: myAttackInfo.color, textShadow: attackGauge >= 25 ? `0 0 10px ${myAttackInfo.color}` : "none" }}>{myAttackInfo.label}</div>
+                            <div className="vs-gauge-label" style={{ color: myAttackInfo.color, textShadow: attackGauge >= 20 ? `0 0 10px ${myAttackInfo.color}` : "none" }}>{myAttackInfo.label}</div>
                           </div>
                         </div>
                         
@@ -1317,12 +1319,11 @@ export default function App() {
                           <div className="vs-hp-val">{Math.max(0, eHp)}</div>
                           <div className="vs-gauge-wrap" style={{ alignItems: "flex-end" }}>
                             <div className="vs-gauge-bg">
-                              <div className={`vs-gauge-fill tier-${Math.floor(eGauge/25)} enemy`} style={{ width: `${Math.max(0, Math.min(100, eGauge))}%` }} />
-                              <div className="gauge-marker" style={{ right: "25%" }} />
-                              <div className="gauge-marker" style={{ right: "50%" }} />
-                              <div className="gauge-marker" style={{ right: "75%" }} />
+                              <div className={`vs-gauge-fill tier-${getTierClass(eGauge)} enemy`} style={{ width: `${Math.max(0, Math.min(100, eGauge))}%` }} />
+                              <div className="gauge-marker" style={{ right: "20%" }} />
+                              <div className="gauge-marker" style={{ right: "60%" }} />
                             </div>
-                            <div className="vs-gauge-label" style={{ color: enemyAttackInfo.color, textShadow: eGauge >= 25 ? `0 0 10px ${enemyAttackInfo.color}` : "none" }}>{enemyAttackInfo.label}</div>
+                            <div className="vs-gauge-label" style={{ color: enemyAttackInfo.color, textShadow: eGauge >= 20 ? `0 0 10px ${enemyAttackInfo.color}` : "none" }}>{enemyAttackInfo.label}</div>
                           </div>
                         </div>
                       </>

@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/purity */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signInAnonymously } from "firebase/auth";
-import { ref, set, get, onValue, onDisconnect, update, remove, push, onChildAdded } from "firebase/database";
+import { ref, set, get, onValue, onDisconnect, update, remove, push, onChildAdded, serverTimestamp } from "firebase/database";
 import { auth, db } from "./firebase";
 import clockTick from "./clock-tick.mp3";
 
@@ -318,6 +318,8 @@ export default function App() {
 
   const fakeJamChargesRef = useRef(0);
   const [hasShield, setHasShield] = useState(false);
+  const [shieldBreakAnim, setShieldBreakAnim] = useState(false);
+  const [showSkull, setShowSkull] = useState(false);
   const [lastAttackSent, setLastAttackSent] = useState(null);
   const [lastDamageTaken, setLastDamageTaken] = useState(null);
   const [enemyHitAnim, setEnemyHitAnim] = useState(false);
@@ -381,9 +383,15 @@ export default function App() {
       attacksUnsubscribeRef.current = null;
     }
     if (myPlayerRef.current) {
+      if (myRoomId) {
+        update(ref(db, `rooms/${myRoomId}`), { matchState: "waiting" }).catch(() => {});
+      }
       remove(myPlayerRef.current).catch(() => {});
       myPlayerRef.current = null;
     }
+    setMyRoomId("");
+    setOpponentUid(null);
+    setOpponentData(null);
   };
 
   const handleIncomingAttack = (type) => {
@@ -392,6 +400,8 @@ export default function App() {
         setCentralNotice({ text: "BLOCKED", type: "good", subtext: "Enemy attack nullified" });
         addLog("Blocked Enemy Attack", "good");
         playFakeAvoidSound();
+        setShieldBreakAnim(true);
+        setTimeout(() => setShieldBreakAnim(false), 500);
         return false;
       }
       
@@ -413,47 +423,70 @@ export default function App() {
           setLastDamageTaken("FAKE JAM");
           setCentralNotice({ text: "FAKE JAM HIT -12", type: "critical", subtext: "Next 2 keys are FAKE" });
           addLog("Took 12 DMG and 2 Fakes from FAKE JAM", "critical");
+          
+          setShowSkull(true);
+          setTimeout(() => setShowSkull(false), 1000);
           break;
         default: break;
       }
       return currentShield;
     });
-  };
-
-  const connectToRoom = async (id) => {
+  };  const connectToRoom = async (id) => {
     if (!id.trim() || !myUid) return;
     
     const validId = id.toUpperCase();
+    cleanupRoom();
+
     setGameMode("multi");
     setMyRoomId(validId);
     setOpponentData(null);
     setOpponentStatus("waiting");
     setScreen("room_wait");
-    setMessage({ text: "CONNECTING...", id: Date.now() });
-
-    cleanupRoom();
 
     const roomRef = ref(db, `rooms/${validId}`);
     try {
       const snapshot = await get(roomRef);
-      let currentPlayers = {};
       if (snapshot.exists()) {
         const data = snapshot.val();
-        currentPlayers = data.players || {};
-      }
-
-      const playerIds = Object.keys(currentPlayers);
-      if (playerIds.length >= 2 && !playerIds.includes(myUid)) {
-        setMessage({ text: "ROOM IS FULL", id: Date.now() });
-        setScreen("room_input");
-        return;
+        const ps = data.players || {};
+        let validOpponents = 0;
+        for (const pid of Object.keys(ps)) {
+          if (pid !== myUid) {
+            const p = ps[pid];
+            if (p.connected && ["waiting", "ready", "playing", "alive", "dead"].includes(p.status)) {
+              validOpponents++;
+            } else {
+              remove(ref(db, `rooms/${validId}/players/${pid}`)).catch(()=>{});
+            }
+          }
+        }
+        if (validOpponents >= 1) {
+          if (validOpponents >= 2) {
+            setMessage({ text: "ROOM IS FULL", type: "bad", id: Date.now() });
+            setScreen("room_input");
+            return;
+          }
+        } else {
+          await update(roomRef, { matchState: "waiting" }).catch(()=>{});
+        }
+      } else {
+        await set(roomRef, { matchState: "waiting" }).catch(()=>{});
       }
 
       const playerRef = ref(db, `rooms/${validId}/players/${myUid}`);
       myPlayerRef.current = playerRef;
       
       onDisconnect(playerRef).remove();
-      await set(playerRef, { score: 0, lives: STARTING_LIVES, status: "alive" });
+      await update(playerRef, { 
+        uid: myUid, 
+        score: 0, 
+        battleHp: 60, 
+        attackGauge: 0, 
+        lives: STARTING_LIVES, 
+        status: "waiting",
+        connected: true,
+        joinedAt: serverTimestamp() 
+      });
 
       let matchTriggered = false;
       const unsubscribe = onValue(roomRef, (snap) => {
@@ -463,10 +496,14 @@ export default function App() {
           return;
         }
 
+        const ms = data.matchState || "waiting";
         const players = data.players;
         const ids = Object.keys(players);
-        
-        if (ids.length < 2) {
+        const myData = players[myUid];
+
+        const validEnemyId = ids.find(p => p !== myUid && players[p].connected && ["waiting", "ready", "playing", "alive", "dead"].includes(players[p].status));
+
+        if (!validEnemyId) {
           setOpponentStatus("waiting");
           if (matchTriggered) {
              setOpponentStatus("disconnected");
@@ -476,13 +513,24 @@ export default function App() {
           setOpponentData(null);
           setOpponentUid(null);
         } else {
-          const enemyId = ids.find(p => p !== myUid);
-          if (enemyId) {
-            setOpponentUid(enemyId);
-            const opData = players[enemyId];
-            setOpponentData(opData);
-            
-            if (!matchTriggered) {
+          setOpponentUid(validEnemyId);
+          const opData = players[validEnemyId];
+          setOpponentData(opData);
+          setOpponentStatus(opData.status);
+
+          if (!matchTriggered) {
+            if (ms === "waiting") {
+               if (myData.status === "waiting") {
+                  update(playerRef, { status: "ready" }).catch(()=>{});
+               }
+               if (myData.status === "ready" && opData.status === "ready") {
+                  if (myUid < validEnemyId) {
+                     update(roomRef, { matchState: "countdown" }).catch(()=>{});
+                  }
+               }
+            }
+
+            if (ms === "countdown") {
               matchTriggered = true;
               setOpponentStatus("matched");
               setMessage({ text: "OPPONENT FOUND!", id: Date.now() });
@@ -500,6 +548,8 @@ export default function App() {
               setSuccessfulHits(0);
               fakeJamChargesRef.current = 0;
               setHasShield(false);
+              setShieldBreakAnim(false);
+              setShowSkull(false);
               setLastAttackSent(null);
               setLastDamageTaken(null);
               setBattleLog([]);
@@ -527,7 +577,6 @@ export default function App() {
 
     } catch (error) {
       console.error(error);
-      setMessage({ text: "CONNECTION FAILED", id: Date.now() });
       setScreen("room_input");
     }
   };
@@ -1279,6 +1328,7 @@ export default function App() {
                           <div className="vs-name">YOU</div>
                           <div className="vs-hp-bar">
                             {hasShield && <div className="shield-overlay" />}
+                            {fakeJamChargesRef.current > 0 && <div className="jam-overlay player-jam" />}
                             <div className="vs-hp-fill" style={{ width: `${Math.max(0, Math.min(100, (battleHp/60)*100))}%`, background: battleHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, battleHp)}</div>
@@ -1303,6 +1353,7 @@ export default function App() {
                           </div>
                           <div className="vs-hp-bar">
                             {opponentData?.hasShield && <div className="shield-overlay enemy-shield" />}
+                            {opponentData?.fakeJamCharges > 0 && <div className="jam-overlay enemy-jam" />}
                             <div className="vs-hp-fill enemy" style={{ width: `${Math.max(0, Math.min(100, (eHp/60)*100))}%`, background: eHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, eHp)}</div>
@@ -1338,6 +1389,12 @@ export default function App() {
 
               <section className="game-grid">
                 <div className="arena">
+                  {hasShield && !shieldBreakAnim && <div className="shield-field" />}
+                  {shieldBreakAnim && <div className="shield-field shield-break" />}
+                  {fakeJamChargesRef.current > 0 && <div className="jam-aura" />}
+                  {showSkull && (
+                    <div className="skull-popup">☠</div>
+                  )}
                   <div
                     className={`arena-inner ${isDanger && screen === "playing" ? "danger" : ""} ${isZone ? "zone" : ""}`}
                   />

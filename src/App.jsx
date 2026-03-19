@@ -344,11 +344,10 @@ export default function App() {
   const [battleLog, setBattleLog] = useState([]);
   const [centralNotice, setCentralNotice] = useState(null);
 
-  const addLog = (text, type = "info") => {
+  const addBattleLog = (type, text) => {
     setBattleLog((prev) => {
-      const next = [...prev, { id: Date.now() + Math.random(), text, type }];
-      if (next.length > 5) return next.slice(next.length - 5);
-      return next;
+      const newLogs = [...prev, { id: Date.now() + Math.random(), type, text }].slice(-3);
+      return newLogs;
     });
   };
 
@@ -400,9 +399,9 @@ export default function App() {
     }
     if (myPlayerRef.current) {
       if (myRoomId) {
-        update(ref(db, `rooms/${myRoomId}`), { matchState: "waiting" }).catch(() => {});
+        update(ref(db, `rooms/${myRoomId}`), { matchState: "waiting" }).catch(() => { });
       }
-      remove(myPlayerRef.current).catch(() => {});
+      remove(myPlayerRef.current).catch(() => { });
       myPlayerRef.current = null;
     }
     setMyRoomId("");
@@ -414,21 +413,21 @@ export default function App() {
     setHasShield(currentShield => {
       if (currentShield) {
         setCentralNotice({ text: "BLOCKED", type: "good", subtext: "Enemy attack nullified" });
-        addLog("Blocked Enemy Attack", "good");
+        addBattleLog("good", "Blocked Enemy Attack");
         playFakeAvoidSound();
         setShieldBreakAnim(true);
         setTimeout(() => setShieldBreakAnim(false), 500);
         return false;
       }
-      
-      switch(type) {
+
+      switch (type) {
         case "light":
           setBattleHp(s => Math.max(0, s - 8));
           setMessage({ text: "UNDER ATTACK: LIGHT -8", type: "bad", id: Date.now() });
           setFlashType("trap");
           setLastDamageTaken("LIGHT ATTACK");
           setCentralNotice({ text: "LIGHT ATTACK HIT -8", type: "damage", subtext: "Enemy used Light Attack!" });
-          addLog("Took 8 DMG from LIGHT ATTACK", "damage");
+          addBattleLog("damage", "Took 8 DMG from LIGHT ATTACK");
           break;
         case "fakejam":
           setBattleHp(s => Math.max(0, s - 12));
@@ -438,8 +437,8 @@ export default function App() {
           setGlitchAnim(1);
           setLastDamageTaken("FAKE JAM");
           setCentralNotice({ text: "FAKE JAM HIT -12", type: "critical", subtext: "Next 2 keys are FAKE" });
-          addLog("Took 12 DMG and 2 Fakes from FAKE JAM", "critical");
-          
+          addBattleLog("critical", "Took 12 DMG and 2 Fakes from FAKE JAM");
+
           setShowSkull(true);
           setTimeout(() => setShowSkull(false), 1000);
           break;
@@ -447,9 +446,9 @@ export default function App() {
       }
       return currentShield;
     });
-  };  const connectToRoom = async (id) => {
+  }; const connectToRoom = async (id) => {
     if (!id.trim() || !myUid) return;
-    
+
     const validId = id.toUpperCase();
     cleanupRoom();
 
@@ -472,7 +471,7 @@ export default function App() {
             if (p.connected && ["waiting", "ready", "playing", "alive", "dead"].includes(p.status)) {
               validOpponents++;
             } else {
-              remove(ref(db, `rooms/${validId}/players/${pid}`)).catch(()=>{});
+              remove(ref(db, `rooms/${validId}/players/${pid}`)).catch(() => { });
             }
           }
         }
@@ -483,25 +482,25 @@ export default function App() {
             return;
           }
         } else {
-          await update(roomRef, { matchState: "waiting" }).catch(()=>{});
+          await update(roomRef, { matchState: "waiting" }).catch(() => { });
         }
       } else {
-        await set(roomRef, { matchState: "waiting" }).catch(()=>{});
+        await set(roomRef, { matchState: "waiting" }).catch(() => { });
       }
 
       const playerRef = ref(db, `rooms/${validId}/players/${myUid}`);
       myPlayerRef.current = playerRef;
-      
+
       onDisconnect(playerRef).remove();
-      await update(playerRef, { 
-        uid: myUid, 
-        score: 0, 
-        battleHp: 60, 
-        attackGauge: 0, 
-        lives: STARTING_LIVES, 
+      await update(playerRef, {
+        uid: myUid,
+        score: 0,
+        battleHp: 60,
+        attackGauge: 0,
+        lives: STARTING_LIVES,
         status: "waiting",
         connected: true,
-        joinedAt: serverTimestamp() 
+        joinedAt: serverTimestamp()
       });
 
       let matchTriggered = false;
@@ -522,9 +521,9 @@ export default function App() {
         if (!validEnemyId) {
           setOpponentStatus("waiting");
           if (matchTriggered) {
-             setOpponentStatus("disconnected");
+            setOpponentStatus("disconnected");
           } else {
-             setMessage({ text: "WAITING FOR OPPONENT", id: Date.now() });
+            setMessage({ text: "WAITING FOR OPPONENT", id: Date.now() });
           }
           setOpponentData(null);
           setOpponentUid(null);
@@ -536,21 +535,21 @@ export default function App() {
 
           if (!matchTriggered) {
             if (ms === "waiting") {
-               if (myData.status === "waiting") {
-                  update(playerRef, { status: "ready" }).catch(()=>{});
-               }
-               if (myData.status === "ready" && opData.status === "ready") {
-                  if (myUid < validEnemyId) {
-                     update(roomRef, { matchState: "countdown" }).catch(()=>{});
-                  }
-               }
+              if (myData.status === "waiting") {
+                update(playerRef, { status: "ready" }).catch(() => { });
+              }
+              if (myData.status === "ready" && opData.status === "ready") {
+                if (myUid < validEnemyId) {
+                  update(roomRef, { matchState: "countdown" }).catch(() => { });
+                }
+              }
             }
 
             if (ms === "countdown") {
               matchTriggered = true;
               setOpponentStatus("matched");
               setMessage({ text: "OPPONENT FOUND!", id: Date.now() });
-              
+
               setScore(0);
               setTimeLeft(GAME_TIME);
               timeLeftRef.current = GAME_TIME;
@@ -587,7 +586,7 @@ export default function App() {
         const attack = snap.val();
         if (attack && attack.to === myUid) {
           handleIncomingAttack(attack.type);
-          remove(snap.ref).catch(() => {});
+          remove(snap.ref).catch(() => { });
         }
       });
       attacksUnsubscribeRef.current = unsubAttacks;
@@ -787,22 +786,22 @@ export default function App() {
 
   const sendAttack = (type, msg) => {
     if (gameMode !== "multi" || !myRoomId || !opponentUid) return;
-    
+
     const attacksRef = ref(db, `rooms/${myRoomId}/attacks`);
     push(attacksRef, {
       to: opponentUid,
       type: type,
       timestamp: Date.now()
-    }).catch(() => {});
+    }).catch(() => { });
 
     setMessage({ text: msg, type: "good", id: Date.now() });
-    
+
     const attackName = msg.split(": ")[1] || type.toUpperCase();
     setLastAttackSent(attackName);
-    
+
     setCentralNotice({ text: attackName, type: "attack", subtext: "Attack Success!" });
-    addLog(`You hit ${attackName}`, "attack");
-    
+    addBattleLog("attack", `You hit ${attackName}`);
+
     setEnemyHitAnim(true);
     setTimeout(() => setEnemyHitAnim(false), 500);
   };
@@ -823,7 +822,7 @@ export default function App() {
         setShieldActivateAnim(true);
         setTimeout(() => setShieldActivateAnim(false), 800);
         setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Next attack blocked" });
-        
+
         // Dummy enemy attacks shortly after
         setTimeout(() => {
           handleIncomingAttack("light");
@@ -834,7 +833,7 @@ export default function App() {
         let type = "light"; let cost = 20; let msg = "LIGHT ATTACK";
         if (attackGauge >= 100) { type = "shield"; cost = 100; msg = "SHIELD DEPLOYED"; }
         else if (attackGauge >= 60) { type = "fakejam"; cost = 60; msg = "FAKE JAM"; }
-        
+
         setAttackGauge(prev => Math.max(0, prev - cost));
         if (type === "shield") {
           setHasShield(true);
@@ -856,7 +855,7 @@ export default function App() {
     }
 
     if (gameMode !== "multi" || attackGauge < 20) return;
-    
+
     let type = "light";
     let cost = 20;
     let msg = "ATTACK SENT: LIGHT";
@@ -876,14 +875,14 @@ export default function App() {
     }
 
     setAttackGauge(prev => Math.max(0, prev - cost));
-    
+
     if (type === "shield") {
       setHasShield(true);
       setShieldActivateAnim(true);
       setTimeout(() => setShieldActivateAnim(false), 800);
       setMessage({ text: msg, type: "good", id: Date.now() });
       setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Next attack blocked" });
-      addLog("Deployed SHIELD", "good");
+      addBattleLog("good", "Deployed SHIELD");
     } else {
       sendAttack(type, msg);
     }
@@ -1085,14 +1084,14 @@ export default function App() {
 
   useEffect(() => {
     if (gameMode === "multi" && screen === "playing" && myPlayerRef.current && myUid) {
-      update(myPlayerRef.current, { 
-        score, 
-        battleHp, 
-        attackGauge, 
+      update(myPlayerRef.current, {
+        score,
+        battleHp,
+        attackGauge,
         lives,
         hasShield,
-        status: battleHp <= 0 ? "dead" : "alive" 
-      }).catch(() => {});
+        status: battleHp <= 0 ? "dead" : "alive"
+      }).catch(() => { });
     }
   }, [score, battleHp, attackGauge, lives, hasShield, gameMode, screen, myUid]);
 
@@ -1249,7 +1248,7 @@ export default function App() {
       playSuccessSound();
       setMessage({ text: "PERFECT", id: Date.now() });
       setFlashType("success");
-      
+
       if (tutorialStep === 1) {
         const nextTarget = tutorialTarget + 1;
         setTutorialTarget(nextTarget);
@@ -1282,7 +1281,7 @@ export default function App() {
       playMissSound();
       setMessage({ text: "MISS", id: Date.now() });
       setFlashType("miss");
-      
+
       if (tutorialStep === 6 && tutorialPhase === "fake_key_active") {
         setTutorialPhase("retry_wait");
         setCentralNotice({ text: "FAILED", type: "bad", subtext: "今の FAKE キーは押してはいけません" });
@@ -1324,12 +1323,12 @@ export default function App() {
             setCentralNotice({ text: "FAKE AVOIDED", type: "good", subtext: "もう1回 FAKE キーが来ます" });
             spawnNextKey();
           } else {
-             setTutorialPhase("fake_avoid_success");
-             setCentralNotice({ text: "FAKE JAM EVADED", type: "good", subtext: "妨害を正しく回避しました" });
-             setTimeout(() => {
-               setTutorialPhase("success");
-             }, 2000);
-             setCurrentKey("");
+            setTutorialPhase("fake_avoid_success");
+            setCentralNotice({ text: "FAKE JAM EVADED", type: "good", subtext: "妨害を正しく回避しました" });
+            setTimeout(() => {
+              setTutorialPhase("success");
+            }, 2000);
+            setCurrentKey("");
           }
           return;
         } else if (tutorialStep === 9) {
@@ -1441,8 +1440,9 @@ export default function App() {
       }}
     >
       {flashType && <div className={`flash ${flashType}`} />}
-
-      <div className="shell">
+      {shieldActivateAnim && <div className="shield-activate-popup" />}
+      
+      <div className={`shell ${(screen === "playing" || screen === "tutorial") ? "compact-mode" : ""}`}>
         <header className="header">
           <div>
             <div className={`eyebrow ${isRushTime ? "rush" : ""}`}>
@@ -1513,9 +1513,9 @@ export default function App() {
                             </div>
                           ))}
                         </div>
-                        <button 
-                          className="title-btn" 
-                          style={{ fontSize: 12, padding: "4px 8px", marginTop: "12px", width: "100%", opacity: 0.8 }} 
+                        <button
+                          className="title-btn"
+                          style={{ fontSize: 12, padding: "4px 8px", marginTop: "12px", width: "100%", opacity: 0.8 }}
                           onClick={clearTopScores}
                         >
                           RESET RECORDS
@@ -1591,22 +1591,26 @@ export default function App() {
           {(screen === "playing" || screen === "result" || screen === "tutorial") && (
             <>
               {gameMode === "tutorial" && (
-                <section className="tutorial-hud" style={{ marginBottom: 24, textAlign: 'center', background: 'rgba(37, 99, 235, 0.1)', border: '1px solid #3b82f6', borderRadius: 16, padding: 20 }}>
-                  <div className="tutorial-step-title" style={{ fontSize: 24, fontWeight: 'bold', color: '#60a5fa', marginBottom: 12, letterSpacing: '0.1em' }}>{TUTORIAL_STEPS[tutorialStep].title}</div>
-                  <div className="tutorial-desc-box" style={{ fontSize: 16, lineHeight: 1.6, color: '#d1d5db', marginBottom: 16 }}>
-                    {TUTORIAL_STEPS[tutorialStep].lines.map((l, i) => <p key={i} style={{ margin: 0 }}>{l}</p>)}
-                  </div>
-                  {tutorialPhase === "intro" && (
-                    <button className="start-btn tutorial-next-btn" onClick={tutorialStep === 0 || tutorialStep === 3 || tutorialStep === 8 ? advanceTutorial : startTutorialPhase} style={{ padding: '12px 32px', fontSize: 16 }}>
-                      {tutorialStep === 0 || tutorialStep === 3 || tutorialStep === 8 ? "NEXT STEP" : "START"}
-                    </button>
-                  )}
-                  {tutorialPhase === "success" && (
-                    <div className="tutorial-success-box" style={{ animation: 'txtPopSmall 0.3s ease' }}>
-                      <div className="success-text" style={{ color: '#4ade80', fontSize: 24, fontWeight: 'bold', marginBottom: 12 }}>CLEAR!</div>
-                      <button className="start-btn tutorial-next-btn" onClick={advanceTutorial} style={{ padding: '12px 32px', fontSize: 16, background: '#16a34a', borderColor: '#22c55e' }}>NEXT STEP</button>
+                <section className="tutorial-hud compact-hud" style={{ marginBottom: 8, background: 'rgba(37, 99, 235, 0.1)', border: '1px solid #3b82f6', borderRadius: 12, padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                  <div style={{ flex: 1, textAlign: 'left' }}>
+                    <div className="tutorial-step-title" style={{ fontSize: 16, fontWeight: 'bold', color: '#60a5fa', marginBottom: 4, letterSpacing: '0.05em' }}>{TUTORIAL_STEPS[tutorialStep].title}</div>
+                    <div className="tutorial-desc-box" style={{ fontSize: 13, lineHeight: 1.4, color: '#d1d5db', display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
+                      {TUTORIAL_STEPS[tutorialStep].lines.map((l, i) => <span key={i}>{l}</span>)}
                     </div>
-                  )}
+                  </div>
+                  <div style={{ flexShrink: 0 }}>
+                    {tutorialPhase === "intro" && (
+                      <button className="start-btn tutorial-next-btn" onClick={tutorialStep === 0 || tutorialStep === 3 || tutorialStep === 8 ? advanceTutorial : startTutorialPhase} style={{ padding: '8px 24px', fontSize: 14 }}>
+                        {tutorialStep === 0 || tutorialStep === 3 || tutorialStep === 8 ? "NEXT STEP" : "START"}
+                      </button>
+                    )}
+                    {tutorialPhase === "success" && (
+                      <div className="tutorial-success-box" style={{ animation: 'txtPopSmall 0.3s ease', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="success-text" style={{ color: '#4ade80', fontSize: 18, fontWeight: 'bold' }}>CLEAR!</div>
+                        <button className="start-btn tutorial-next-btn" onClick={advanceTutorial} style={{ padding: '8px 24px', fontSize: 14, background: '#16a34a', borderColor: '#22c55e' }}>NEXT STEP</button>
+                      </div>
+                    )}
+                  </div>
                 </section>
               )}
 
@@ -1619,7 +1623,7 @@ export default function App() {
                     let leadClass = "even";
                     if (battleHp > eHp) { leadStatus = "LEADING"; leadClass = "leading"; }
                     else if (battleHp < eHp) { leadStatus = "LOSING"; leadClass = "losing"; }
-                    
+
                     const getNextAttackInfo = (gauge) => {
                       if (gauge >= 100) return { label: "SPACE: SHIELD", color: "#6ee7b7" };
                       if (gauge >= 60) return { label: "SPACE: FAKE JAM", color: "#d8b4fe" };
@@ -1644,7 +1648,7 @@ export default function App() {
                           <div className={`vs-hp-bar ${gameMode === "tutorial" && tutorialStep === 3 ? "tutorial-pulse" : ""}`}>
                             {hasShield && <div className="shield-overlay" />}
                             {fakeJamChargesRef.current > 0 && <div className="jam-overlay player-jam" />}
-                            <div className="vs-hp-fill" style={{ width: `${Math.max(0, Math.min(100, (battleHp/60)*100))}%`, background: battleHp <= 12 ? "#ef4444" : "#22c55e" }} />
+                            <div className="vs-hp-fill" style={{ width: `${Math.max(0, Math.min(100, (battleHp / 60) * 100))}%`, background: battleHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, battleHp)}</div>
                           <div className={`vs-gauge-wrap ${gameMode === "tutorial" && tutorialStep === 4 ? "tutorial-pulse" : ""}`}>
@@ -1656,7 +1660,7 @@ export default function App() {
                             <div className="vs-gauge-label" style={{ color: myAttackInfo.color, textShadow: attackGauge >= 20 ? `0 0 10px ${myAttackInfo.color}` : "none" }}>{myAttackInfo.label}</div>
                           </div>
                         </div>
-                        
+
                         <div className="vs-center">
                           <div className={`vs-time ${timeLeft <= 10 && screen === "playing" ? "danger" : ""}`}>{timeLeft}</div>
                           <div className={`vs-lead-status ${leadClass}`}>{leadStatus}</div>
@@ -1669,7 +1673,7 @@ export default function App() {
                           <div className="vs-hp-bar">
                             {opponentData?.hasShield && <div className="shield-overlay enemy-shield" />}
                             {opponentData?.fakeJamCharges > 0 && <div className="jam-overlay enemy-jam" />}
-                            <div className="vs-hp-fill enemy" style={{ width: `${Math.max(0, Math.min(100, (eHp/60)*100))}%`, background: eHp <= 12 ? "#ef4444" : "#22c55e" }} />
+                            <div className="vs-hp-fill enemy" style={{ width: `${Math.max(0, Math.min(100, (eHp / 60) * 100))}%`, background: eHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, eHp)}</div>
                           <div className="vs-gauge-wrap" style={{ alignItems: "flex-end" }}>
@@ -1830,7 +1834,7 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  
+
                   {(gameMode === "multi" || gameMode === "tutorial") && (screen === "playing" || screen === "tutorial") && (
                     <div className="battle-log-container">
                       {battleLog.map((log) => (
@@ -1846,14 +1850,14 @@ export default function App() {
                   {(gameMode === "multi" || gameMode === "tutorial") ? (
                     <div className="side-card tactical-loadout">
                       <div className="side-title">TACTICAL LOADOUT</div>
-                      
+
                       <div className={`loadout-item ${attackGauge >= 60 ? "available" : attackGauge >= 20 ? "ready light-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 5 && attackGauge >= 20 ? "tutorial-pulse" : ""}`}>
                         <div className="loadout-header">
                           <span className="loadout-cost">20G</span>
                           <span className="loadout-name">LIGHT ATTACK</span>
                           <span className="loadout-tag light">CHIP</span>
                         </div>
-                        <div className="loadout-desc">確実な小ダメージ（8HP）を与える基本攻撃。<br/>消費が軽く、連発での牽制や削りに最適。</div>
+                        <div className="loadout-desc">確実な小ダメージ（8HP）を与える基本攻撃。<br />消費が軽く、連発での牽制や削りに最適。</div>
                       </div>
 
                       <div className={`loadout-item ${attackGauge >= 100 ? "available" : attackGauge >= 60 ? "ready jam-ready" : "locked"}`}>
@@ -1862,7 +1866,7 @@ export default function App() {
                           <span className="loadout-name">FAKE JAM</span>
                           <span className="loadout-tag jam">DISRUPT</span>
                         </div>
-                        <div className="loadout-desc">ダメージ（12HP）に加え、相手の次の2連続キー<br/>を強制的にフェイク化してリズムを崩す。</div>
+                        <div className="loadout-desc">ダメージ（12HP）に加え、相手の次の2連続キー<br />を強制的にフェイク化してリズムを崩す。</div>
                       </div>
 
                       <div className={`loadout-item ${attackGauge >= 100 ? "ready shield-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 7 && attackGauge >= 100 ? "tutorial-pulse" : ""}`}>
@@ -1871,14 +1875,14 @@ export default function App() {
                           <span className="loadout-name">SHIELD</span>
                           <span className="loadout-tag shield">DEFEND</span>
                         </div>
-                        <div className="loadout-desc">次に受ける相手の攻撃や妨害効果を1度だけ<br/>完全に無効化する防御用バリアを展開する。</div>
+                        <div className="loadout-desc">次に受ける相手の攻撃や妨害効果を1度だけ<br />完全に無効化する防御用バリアを展開する。</div>
                       </div>
 
                       <div className="loadout-status">
                         {attackGauge >= 100 ? "SHIELD DEPLOYMENT READY" :
-                         attackGauge >= 60 ? "FAKE JAM READY" :
-                         attackGauge >= 20 ? "LIGHT ATTACK READY" :
-                         "BUILD GAUGE TO UNLOCK ATTACK"}
+                          attackGauge >= 60 ? "FAKE JAM READY" :
+                            attackGauge >= 20 ? "LIGHT ATTACK READY" :
+                              "BUILD GAUGE TO UNLOCK ATTACK"}
                       </div>
                     </div>
                   ) : (
@@ -1932,7 +1936,7 @@ export default function App() {
                         <span>Status: <span className={opponentStatus === "disconnected" || opponentData.status === "dead" ? "feed-red" : ""}>{opponentStatus === "disconnected" ? "OFFL" : opponentData.status === "dead" ? "DEAD" : "ALV"}</span></span>
                         <span>Score: <span className="feed-strong">{opponentData.score}</span></span>
                       </div>
-                      
+
                       <div className="feed-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "4px", paddingBottom: "12px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", width: "100%", fontSize: "14px" }}>
                           <span>Battle HP</span>
@@ -1999,10 +2003,10 @@ export default function App() {
                 <div className="warning" style={{ color: '#93c5fd' }}>Mission Accomplished</div>
                 <h2 className="hero2" style={{ fontSize: "48px", color: '#60a5fa' }}>TUTORIAL COMPLETE</h2>
                 <div className="desc" style={{ fontSize: '18px', color: '#e5e7eb', marginBottom: '40px' }}>
-                  オンラインバトルの基本を習得しました！<br/>
+                  オンラインバトルの基本を習得しました！<br />
                   準備ができたら Online Battle に挑戦しましょう。
                 </div>
-                
+
                 <div className="title-actions" style={{ display: "flex", flexDirection: "column", gap: "16px", alignItems: "center", maxWidth: "400px", margin: "0 auto" }}>
                   <button className="start-btn multi-btn" onClick={() => { setGameMode("multi"); setScreen("room_input"); }} style={{ width: "100%", background: "#9333ea", borderColor: "#a855f7" }}>
                     Play Online Battle

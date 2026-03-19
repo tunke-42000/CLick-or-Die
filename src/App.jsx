@@ -291,7 +291,7 @@ function playMilestoneSound() {
 const TUTORIAL_STEPS = [
   { title: "WELCOME TO CLICK OR DIE", lines: ["オンラインバトルの基本ルールを", "順番に体験しながら学びます"] },
   { title: "STEP 1 / BASIC INPUT", lines: ["中央に表示されたキーを押してください", "まずは3回成功させましょう"] },
-  { title: "STEP 2 / FAKE KEY", lines: ["紫っぽい異常なキーは FAKE です", "FAKE は押さずに待つと回避できます。回避してみましょう"] },
+  { title: "STEP 2 / FAKE KEY", lines: ["通常キーは押し、紫の異常なキー(FAKE)は", "押さずにやり過ごしてください", "FAKE を3回正しく無視できればクリアです"] },
   { title: "STEP 3 / BATTLE RULE", lines: ["オンラインでは HP を削り合います", "相手より有利な状態で終われば勝利です"] },
   { title: "STEP 4 / ATTACK GAUGE", lines: ["正確に入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います"] },
   { title: "STEP 5 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "SPACEキーを押して発動してみましょう"] },
@@ -622,15 +622,20 @@ export default function App() {
 
   const spawnNextKey = (previous = "") => {
     const next = pickRandomKey(previous || currentKey);
-    let fake = false;
-
     if (fakeJamChargesRef.current > 0) {
-      fake = true;
       fakeJamChargesRef.current -= 1;
+      setIsFake(true);
+    } else if (gameMode === "tutorial" && tutorialPhase === "play" && tutorialStep === 2) {
+      // 30% chance for Fake, but don't spawn consecutive fakes to keep it fair and balanced
+      if (isFake) {
+        setIsFake(false);
+      } else {
+        setIsFake(Math.random() < 0.35);
+      }
+    } else {
+      setIsFake(false);
     }
-
     setCurrentKey(next);
-    setIsFake(fake);
     setReactionStart(Date.now());
     setSpawnId(Date.now());
   };
@@ -722,8 +727,8 @@ export default function App() {
       spawnNextKey();
     } else if (tutorialStep === 2) {
       setTutorialPhase("play");
+      setIsFake(false); // Start with a safe key
       spawnNextKey();
-      setIsFake(true);
     } else if (tutorialStep === 6) {
       setTutorialPhase("enemy_fakejam_attack");
       setTimeout(() => {
@@ -1254,6 +1259,8 @@ export default function App() {
         } else {
           spawnNextKey();
         }
+      } else if (tutorialStep === 2) {
+        spawnNextKey();
       } else if (tutorialStep === 4) {
         setAttackGauge(prev => {
           const next = Math.min(100, prev + 25);
@@ -1300,10 +1307,16 @@ export default function App() {
         setFlashType("fake-avoid");
         setAvoidedKey(currentKey);
         setTimeout(() => setAvoidedKey(null), 350);
-        
         if (tutorialStep === 2) {
-          setTutorialPhase("success");
-          setCurrentKey("");
+          const nextTarget = tutorialTarget + 1;
+          setTutorialTarget(nextTarget);
+          setCentralNotice({ text: "GOOD", type: "good", subtext: `FAKE AVOID ${nextTarget} / 3` });
+          if (nextTarget >= 3) {
+            setTimeout(() => setTutorialPhase("success"), 500);
+            setCurrentKey("");
+          } else {
+            spawnNextKey();
+          }
           return;
         } else if (tutorialStep === 6) {
           if (tutorialTarget === 0) {
@@ -1327,6 +1340,9 @@ export default function App() {
         playMissSound();
         setMessage({ text: "TOO SLOW", id: Date.now() });
         setFlashType("miss");
+        if (tutorialStep === 2) {
+          setCentralNotice({ text: "TOO SLOW", type: "bad", subtext: "通常キーは押してください" });
+        }
         if (tutorialStep === 9) setCombo(0);
         spawnNextKey(currentKey);
       }
@@ -1335,7 +1351,10 @@ export default function App() {
       setMessage({ text: "TRAP", id: Date.now() });
       setFlashType("trap");
       setGlitchAnim(Date.now());
-      if (tutorialStep === 6 && tutorialPhase === "fake_key_active") {
+      if (tutorialStep === 2) {
+        setCentralNotice({ text: "TRAP", type: "bad", subtext: "FAKEキーは押さない！" });
+        spawnNextKey();
+      } else if (tutorialStep === 6 && tutorialPhase === "fake_key_active") {
         setTutorialPhase("retry_wait");
         setCentralNotice({ text: "FAILED", type: "bad", subtext: "今の FAKE キーは押してはいけません" });
         setTimeout(() => {

@@ -418,8 +418,6 @@ export default function App() {
     switch (type) {
       case "light":
         const dmgLight = getReducedDamage(5);
-        setEnemyHitAnim(true);
-        setTimeout(() => setEnemyHitAnim(false), 500);
         setBattleHp(s => Math.max(0, s - dmgLight));
         setMessage({ text: `UNDER ATTACK: LIGHT -${dmgLight}`, type: "bad", id: Date.now() });
         setFlashType("trap");
@@ -429,8 +427,6 @@ export default function App() {
         break;
       case "shield_attack":
         const dmgShield = getReducedDamage(12);
-        setEnemyHitAnim(true);
-        setTimeout(() => setEnemyHitAnim(false), 500);
         setBattleHp(s => Math.max(0, s - dmgShield));
         setMessage({ text: `UNDER ATTACK: SHIELD -${dmgShield}`, type: "bad", id: Date.now() });
         setFlashType("trap");

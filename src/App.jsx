@@ -288,10 +288,26 @@ function playMilestoneSound() {
   setTimeout(() => playTone({ frequency: 1320, sweepTo: 2640, duration: 0.15, type: "sine", volume: 0.035 }), 120);
 }
 
+const TUTORIAL_STEPS = [
+  { title: "WELCOME TO CLICK OR DIE", lines: ["オンラインバトルの基本ルールを", "順番に体験しながら学びます"] },
+  { title: "STEP 1 / BASIC INPUT", lines: ["中央に表示されたキーを押してください", "まずは3回成功させましょう"] },
+  { title: "STEP 2 / MISS", lines: ["違うキーを押すと MISS になります", "まずはわざと違うキーを押してみましょう"] },
+  { title: "STEP 3 / FAKE KEY", lines: ["紫っぽい異常なキーは FAKE です", "FAKE は押さずに待つと回避できます。回避してみましょう"] },
+  { title: "STEP 4 / BATTLE RULE", lines: ["オンラインでは HP を削り合います", "相手より有利な状態で終われば勝利です"] },
+  { title: "STEP 5 / ATTACK GAUGE", lines: ["正確に入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います"] },
+  { title: "STEP 6 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "SPACEキーを押して発動してみましょう"] },
+  { title: "STEP 7 / FAKE JAM", lines: ["ゲージが60以上あると FAKE JAM が使えます", "ダメージに加えて相手にフェイクを付与します。SPACEキーで発動しましょう"] },
+  { title: "STEP 8 / SHIELD", lines: ["ゲージがMAXになると SHIELD を使えます", "次に受ける攻撃を1回だけ無効化します。SPACEキーで防御しましょう"] },
+  { title: "STEP 9 / WIN CONDITIONS", lines: ["勝利条件は以下の通りです", "1. 相手のHPを0にする", "2. 時間切れ時にHPが高い", "3. 同HPなら SCORE が高い"] },
+  { title: "STEP 10 / PRACTICE BATTLE", lines: ["最後に練習試合をしてみましょう", "学んだ操作を使って勝利を目指してください"] },
+];
+
 export default function App() {
   const [screen, setScreen] = useState("title");
 
-  // Initial connection test removed
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialPhase, setTutorialPhase] = useState("intro");
+  const [tutorialTarget, setTutorialTarget] = useState(0);
 
   const [countdown, setCountdown] = useState(3);
 
@@ -671,15 +687,82 @@ export default function App() {
     setScreen("result");
   };
 
+  const advanceTutorial = () => {
+    const next = tutorialStep + 1;
+    if (next >= TUTORIAL_STEPS.length) {
+      setScreen("tutorial_complete");
+      return;
+    }
+    setTutorialStep(next);
+    setTutorialPhase("intro");
+    setTutorialTarget(0);
+    setScore(0);
+    setBattleHp(60);
+    setAttackGauge(0);
+    setHasShield(false);
+    fakeJamChargesRef.current = 0;
+    setOpponentData({ battleHp: 60, attackGauge: 0, hasShield: false, fakeJamCharges: 0, score: 0 });
+    
+    if (next === 6) setAttackGauge(20);
+    if (next === 7) setAttackGauge(60);
+    if (next === 8) setAttackGauge(100);
+    if (next === 10) {
+      setTimeLeft(GAME_TIME);
+      timeLeftRef.current = GAME_TIME;
+    } else {
+      setTimeLeft(999);
+      timeLeftRef.current = 999;
+    }
+    setCurrentKey("");
+    setIsFake(false);
+  };
+
+  const startTutorialPhase = () => {
+    setTutorialPhase("play");
+    setTutorialTarget(0);
+    if (tutorialStep === 1 || tutorialStep === 2 || tutorialStep === 5 || tutorialStep === 10) {
+      spawnNextKey();
+    } else if (tutorialStep === 3) {
+      spawnNextKey();
+      setIsFake(true);
+    }
+  };
+
   const goToTitle = () => {
     cleanupRoom();
     clearAllTimers();
     stopTickSound();
     setCurrentKey("");
     setIsFake(false);
+    setTutorialStep(0);
+    setTutorialPhase("intro");
     setMessage({ text: "SYSTEM IDLE", id: Date.now() });
     setFlashType(null);
     setScreen("title");
+  };
+
+  const startTutorial = () => {
+    setGameMode("tutorial");
+    setTutorialStep(0);
+    setTutorialPhase("intro");
+    setScore(0);
+    setTimeLeft(999);
+    timeLeftRef.current = 999;
+    setLives(STARTING_LIVES);
+    setBattleHp(60);
+    setAttackGauge(0);
+    setCombo(0);
+    setMaxCombo(0);
+    setCorrectCount(0);
+    setTotalReaction(0);
+    setSuccessfulHits(0);
+    fakeJamChargesRef.current = 0;
+    setHasShield(false);
+    setBattleLog([]);
+    setCentralNotice(null);
+    setOpponentData({ battleHp: 60, attackGauge: 0, hasShield: false, fakeJamCharges: 0, score: 0 });
+    setOpponentStatus("matched");
+    setScreen("tutorial");
   };
 
   const clearTopScores = () => {
@@ -710,6 +793,60 @@ export default function App() {
   };
 
   const manualAttackTrigger = () => {
+    if (gameMode === "tutorial") {
+      if (tutorialPhase !== "play") return;
+      if (tutorialStep === 6 && attackGauge >= 20) {
+        setAttackGauge(0);
+        setCentralNotice({ text: "LIGHT ATTACK", type: "attack", subtext: "Attack Success!" });
+        setEnemyHitAnim(true);
+        setTimeout(() => setEnemyHitAnim(false), 500);
+        setOpponentData(prev => ({ ...prev, battleHp: prev.battleHp - 8 }));
+        setTutorialPhase("success");
+      } else if (tutorialStep === 7 && attackGauge >= 60) {
+        setAttackGauge(0);
+        setCentralNotice({ text: "FAKE JAM", type: "critical", subtext: "Attack Success!" });
+        setEnemyHitAnim(true);
+        setTimeout(() => setEnemyHitAnim(false), 500);
+        setOpponentData(prev => ({ ...prev, battleHp: prev.battleHp - 12, fakeJamCharges: prev.fakeJamCharges + 2 }));
+        setTutorialPhase("success");
+      } else if (tutorialStep === 8 && attackGauge >= 100) {
+        setAttackGauge(0);
+        setHasShield(true);
+        setShieldActivateAnim(true);
+        setTimeout(() => setShieldActivateAnim(false), 800);
+        setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Next attack blocked" });
+        
+        // Dummy enemy attacks shortly after
+        setTimeout(() => {
+          handleIncomingAttack("light");
+          setTimeout(() => setTutorialPhase("success"), 1000);
+        }, 1200);
+      } else if (tutorialStep === 10 && attackGauge >= 20) {
+        // Practice battle manual attack
+        let type = "light"; let cost = 20; let msg = "LIGHT ATTACK";
+        if (attackGauge >= 100) { type = "shield"; cost = 100; msg = "SHIELD DEPLOYED"; }
+        else if (attackGauge >= 60) { type = "fakejam"; cost = 60; msg = "FAKE JAM"; }
+        
+        setAttackGauge(prev => Math.max(0, prev - cost));
+        if (type === "shield") {
+          setHasShield(true);
+          setShieldActivateAnim(true);
+          setTimeout(() => setShieldActivateAnim(false), 800);
+          setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Next attack blocked" });
+        } else {
+          setCentralNotice({ text: msg, type: type === "fakejam" ? "critical" : "attack", subtext: "Attack Success!" });
+          setEnemyHitAnim(true);
+          setTimeout(() => setEnemyHitAnim(false), 500);
+          setOpponentData(prev => ({
+            ...prev,
+            battleHp: Math.max(0, prev.battleHp - (type === "fakejam" ? 12 : 8)),
+            fakeJamCharges: type === "fakejam" ? prev.fakeJamCharges + 2 : prev.fakeJamCharges
+          }));
+        }
+      }
+      return;
+    }
+
     if (gameMode !== "multi" || attackGauge < 20) return;
     
     let type = "light";
@@ -1016,7 +1153,7 @@ export default function App() {
   }, [screen, countdown]);
 
   useEffect(() => {
-    if (screen !== "playing") return;
+    if (screen !== "playing" && screen !== "tutorial") return;
 
     globalTimerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
@@ -1035,16 +1172,20 @@ export default function App() {
   }, [screen]);
 
   useEffect(() => {
-    if (screen === "playing" && timeLeft <= 0) {
-      endGame();
+    if ((screen === "playing" || screen === "tutorial") && timeLeft <= 0) {
+      if (gameMode === "tutorial") {
+        advanceTutorial();
+      } else {
+        endGame();
+      }
     }
-  }, [screen, timeLeft]);
+  }, [screen, timeLeft, gameMode]);
 
   useEffect(() => {
     const audio = tickAudioRef.current;
     if (!audio) return;
 
-    if (screen === "playing" && timeLeft <= 10 && timeLeft > 0) {
+    if ((screen === "playing" || screen === "tutorial") && timeLeft <= 10 && timeLeft > 0) {
       audio.play().catch(() => { });
     } else {
       audio.pause();
@@ -1053,14 +1194,18 @@ export default function App() {
   }, [screen, timeLeft]);
 
   useEffect(() => {
-    if (screen !== "playing" || !currentKey) return;
+    if ((screen !== "playing" && screen !== "tutorial") || !currentKey) return;
 
     if (roundTimeoutRef.current) {
       clearTimeout(roundTimeoutRef.current);
     }
 
     roundTimeoutRef.current = setTimeout(() => {
-      handleTimeout();
+      if (gameMode === "tutorial") {
+        handleTutorialAction("timeout");
+      } else {
+        handleTimeout();
+      }
     }, actualRoundWindow);
 
     return () => {
@@ -1069,7 +1214,7 @@ export default function App() {
         roundTimeoutRef.current = null;
       }
     };
-  }, [screen, currentKey, actualRoundWindow, isFake]);
+  }, [screen, currentKey, actualRoundWindow, isFake, tutorialPhase, tutorialStep]);
 
   useEffect(() => {
     if (!flashType) return;
@@ -1089,13 +1234,105 @@ export default function App() {
     return () => clearTimeout(id);
   }, [centralNotice]);
 
+  const handleTutorialAction = (action) => {
+    if (tutorialPhase !== "play") return;
+
+    if (action === "correct") {
+      playSuccessSound();
+      setMessage({ text: "PERFECT", id: Date.now() });
+      setFlashType("success");
+      
+      if (tutorialStep === 1) {
+        const nextTarget = tutorialTarget + 1;
+        setTutorialTarget(nextTarget);
+        if (nextTarget >= 3) {
+          setTutorialPhase("success");
+          setCurrentKey("");
+        } else {
+          spawnNextKey();
+        }
+      } else if (tutorialStep === 2) {
+        if (tutorialTarget === 1) { // Already missed once
+          setTutorialPhase("success");
+          setCurrentKey("");
+        } else {
+          spawnNextKey(); // Hit before missing, weird but ok
+        }
+      } else if (tutorialStep === 5) {
+        setAttackGauge(prev => {
+          const next = Math.min(100, prev + 25);
+          if (next >= 100) {
+            setTutorialPhase("success");
+            setCurrentKey("");
+          }
+          return next;
+        });
+        if (tutorialPhase !== "success") spawnNextKey();
+      } else if (tutorialStep === 10) {
+        setCombo(prev => prev + 1);
+        setAttackGauge(prev => Math.min(100, prev + 8));
+        spawnNextKey();
+      } else {
+        spawnNextKey();
+      }
+    } else if (action === "wrong") {
+      playMissSound();
+      setMessage({ text: "MISS", id: Date.now() });
+      setFlashType("miss");
+      
+      if (tutorialStep === 2) {
+        if (tutorialTarget === 0) {
+          setTutorialTarget(1);
+          setCentralNotice({ text: "MISS PENALTY", type: "bad", subtext: "Now hit the correct key" });
+        }
+      } else if (tutorialStep === 10) {
+        setCombo(0);
+        setAttackGauge(prev => Math.max(0, prev - 8));
+      }
+      spawnNextKey(currentKey);
+    } else if (action === "timeout") {
+      if (isFake) {
+        playFakeAvoidSound();
+        setMessage({ text: "FAKE AVOID", id: Date.now() });
+        setFlashType("fake-avoid");
+        setAvoidedKey(currentKey);
+        setTimeout(() => setAvoidedKey(null), 350);
+        
+        if (tutorialStep === 3) {
+          setTutorialPhase("success");
+          setCurrentKey("");
+          return;
+        } else if (tutorialStep === 10) {
+          setAttackGauge(prev => Math.min(100, prev + 8));
+        }
+        spawnNextKey();
+      } else {
+        playMissSound();
+        setMessage({ text: "TOO SLOW", id: Date.now() });
+        setFlashType("miss");
+        if (tutorialStep === 10) setCombo(0);
+        spawnNextKey(currentKey);
+      }
+    } else if (action === "fakehit") {
+      playMissSound();
+      setMessage({ text: "TRAP", id: Date.now() });
+      setFlashType("trap");
+      setGlitchAnim(Date.now());
+      if (tutorialStep === 10) {
+        setCombo(0);
+        setAttackGauge(prev => Math.max(0, prev - 10));
+      }
+      spawnNextKey();
+    }
+  };
+
   useEffect(() => {
-    if (screen !== "playing") return;
+    if (screen !== "playing" && screen !== "tutorial") return;
 
     const onKeyDown = (e) => {
       if (e.repeat) return;
 
-      if (e.code === "Space" && gameMode === "multi" && screen === "playing") {
+      if (e.code === "Space" && (gameMode === "multi" || gameMode === "tutorial") && (screen === "playing" || screen === "tutorial")) {
         e.preventDefault();
         manualAttackTrigger();
         return;
@@ -1107,18 +1344,21 @@ export default function App() {
 
       if (pressed === currentKey) {
         if (isFake) {
-          handleFakeHit();
+          if (gameMode === "tutorial") handleTutorialAction("fakehit");
+          else handleFakeHit();
         } else {
-          handleCorrect();
+          if (gameMode === "tutorial") handleTutorialAction("correct");
+          else handleCorrect();
         }
       } else {
-        handleWrong();
+        if (gameMode === "tutorial") handleTutorialAction("wrong");
+        else handleWrong();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [screen, currentKey, isFake, combo, reactionStart]);
+  }, [screen, currentKey, isFake, combo, reactionStart, tutorialPhase, tutorialStep, tutorialTarget]);
 
   useEffect(() => {
     return () => {
@@ -1178,12 +1418,15 @@ export default function App() {
                   たまに出現するフェイクキーは押してはいけない
                 </p>
 
-                <div className="title-actions" style={{ display: "flex", flexWrap: "wrap", gap: "16px", justifyContent: "center", marginTop: "40px" }}>
-                  <button className="start-btn" onClick={() => { setGameMode("single"); setScreen("single_prep"); }}>
+                <div className="title-actions" style={{ display: "flex", flexWrap: "wrap", gap: "16px", justifyContent: "center", margin: "40px auto 0", maxWidth: "600px" }}>
+                  <button className="start-btn" onClick={() => { setGameMode("single"); setScreen("single_prep"); }} style={{ flex: "1 1 calc(50% - 8px)", padding: "18px 24px" }}>
                     Single Play
                   </button>
-                  <button className="start-btn multi-btn" onClick={() => { setGameMode("multi"); setScreen("room_input"); }} style={{ background: "#9333ea", borderColor: "#a855f7" }}>
+                  <button className="start-btn multi-btn" onClick={() => { setGameMode("multi"); setScreen("room_input"); }} style={{ flex: "1 1 calc(50% - 8px)", background: "#9333ea", borderColor: "#a855f7", padding: "18px 24px" }}>
                     Online Battle
+                  </button>
+                  <button className="start-btn tutorial-btn" onClick={startTutorial} style={{ flex: "1 1 100%", background: "#2563eb", borderColor: "#3b82f6", padding: "18px 24px" }}>
+                    Tutorial
                   </button>
                 </div>
               </div>
@@ -1297,9 +1540,29 @@ export default function App() {
             </div>
           )}
 
-          {(screen === "playing" || screen === "result") && (
+          {(screen === "playing" || screen === "result" || screen === "tutorial") && (
             <>
-              {gameMode === "multi" ? (
+              {gameMode === "tutorial" && (
+                <section className="tutorial-hud" style={{ marginBottom: 24, textAlign: 'center', background: 'rgba(37, 99, 235, 0.1)', border: '1px solid #3b82f6', borderRadius: 16, padding: 20 }}>
+                  <div className="tutorial-step-title" style={{ fontSize: 24, fontWeight: 'bold', color: '#60a5fa', marginBottom: 12, letterSpacing: '0.1em' }}>{TUTORIAL_STEPS[tutorialStep].title}</div>
+                  <div className="tutorial-desc-box" style={{ fontSize: 16, lineHeight: 1.6, color: '#d1d5db', marginBottom: 16 }}>
+                    {TUTORIAL_STEPS[tutorialStep].lines.map((l, i) => <p key={i} style={{ margin: 0 }}>{l}</p>)}
+                  </div>
+                  {tutorialPhase === "intro" && (
+                    <button className="start-btn tutorial-next-btn" onClick={tutorialStep === 0 || tutorialStep === 4 || tutorialStep === 9 ? advanceTutorial : startTutorialPhase} style={{ padding: '12px 32px', fontSize: 16 }}>
+                      {tutorialStep === 0 || tutorialStep === 4 || tutorialStep === 9 ? "NEXT STEP" : "START"}
+                    </button>
+                  )}
+                  {tutorialPhase === "success" && (
+                    <div className="tutorial-success-box" style={{ animation: 'txtPopSmall 0.3s ease' }}>
+                      <div className="success-text" style={{ color: '#4ade80', fontSize: 24, fontWeight: 'bold', marginBottom: 12 }}>CLEAR!</div>
+                      <button className="start-btn tutorial-next-btn" onClick={advanceTutorial} style={{ padding: '12px 32px', fontSize: 16, background: '#16a34a', borderColor: '#22c55e' }}>NEXT STEP</button>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {(gameMode === "multi" || gameMode === "tutorial") ? (
                 <section className="vs-header">
                   {(() => {
                     const eHp = opponentData?.battleHp ?? 60;
@@ -1330,13 +1593,13 @@ export default function App() {
                       <>
                         <div className="vs-player">
                           <div className="vs-name">YOU</div>
-                          <div className="vs-hp-bar">
+                          <div className={`vs-hp-bar ${gameMode === "tutorial" && tutorialStep === 4 ? "tutorial-pulse" : ""}`}>
                             {hasShield && <div className="shield-overlay" />}
                             {fakeJamChargesRef.current > 0 && <div className="jam-overlay player-jam" />}
                             <div className="vs-hp-fill" style={{ width: `${Math.max(0, Math.min(100, (battleHp/60)*100))}%`, background: battleHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, battleHp)}</div>
-                          <div className="vs-gauge-wrap">
+                          <div className={`vs-gauge-wrap ${gameMode === "tutorial" && tutorialStep === 5 ? "tutorial-pulse" : ""}`}>
                             <div className="vs-gauge-bg">
                               <div className={`vs-gauge-fill tier-${getTierClass(attackGauge)}`} style={{ width: `${Math.max(0, Math.min(100, attackGauge))}%` }} />
                               <div className="gauge-marker" style={{ left: "20%" }} />
@@ -1401,11 +1664,11 @@ export default function App() {
                     <div className="skull-popup">☠</div>
                   )}
                   <div
-                    className={`arena-inner ${isDanger && screen === "playing" ? "danger" : ""} ${isZone ? "zone" : ""}`}
+                    className={`arena-inner ${(isDanger && screen === "playing") || (tutorialPhase === "play" && tutorialStep === 10 && isDanger) ? "danger" : ""} ${isZone ? "zone" : ""}`}
                   />
 
                   <div className="target-wrap">
-                    {centralNotice && screen === "playing" && (
+                    {centralNotice && (screen === "playing" || screen === "tutorial") && (
                       <div key={centralNotice.id} className={`central-notice ${centralNotice.type}`}>
                         <div className="central-notice-text">{centralNotice.text}</div>
                         {centralNotice.subtext && <div className="central-notice-sub">{centralNotice.subtext}</div>}
@@ -1413,7 +1676,7 @@ export default function App() {
                     )}
                     <div className="target-label">Target Key</div>
 
-                    {comboMsg && screen === "playing" && (
+                    {comboMsg && (screen === "playing" || screen === "tutorial") && (
                       <div className="combo-msg-wrap">
                         <div key={comboMsg.id} className={`combo-text ${comboMsg.type}`}>
                           {comboMsg.text}
@@ -1421,11 +1684,11 @@ export default function App() {
                       </div>
                     )}
 
-                    {screen === "playing" ? (
+                    {(screen === "playing" || screen === "tutorial") ? (
                       <div className="key-box-wrapper">
                         <div
                           key={spawnId}
-                          className={`key-box ${isFake ? "fake" : ""} ${shouldBump ? "bump-anim" : ""}`}
+                          className={`key-box ${isFake ? "fake" : ""} ${shouldBump ? "bump-anim" : ""} ${gameMode === "tutorial" && tutorialStep === 3 && isFake ? "tutorial-pulse" : ""} ${gameMode === "tutorial" && tutorialStep === 2 && tutorialTarget === 0 ? "tutorial-pulse-red" : ""}`}
                           data-text={currentKey}
                         >
                           {currentKey}
@@ -1441,7 +1704,7 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="key-box-wrapper">
-                        {gameMode === "multi" ? (
+                        {(gameMode === "multi" || gameMode === "tutorial") ? (
                           <>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
                               {(() => {
@@ -1500,10 +1763,10 @@ export default function App() {
                     )}
 
                     <div className={`status-text ${getMessageClass(message.text)}`} key={message.id}>
-                      {screen === "playing" ? message.text : "Final Rank"}
+                      {(screen === "playing" || screen === "tutorial") ? message.text : "Final Rank"}
                     </div>
 
-                    {screen === "playing" && (
+                    {(screen === "playing" || (screen === "tutorial" && tutorialStep === 10)) && (
                       <div className="window-wrap">
                         <div className="window-head">
                           <span>入力制限時間</span>
@@ -1520,7 +1783,7 @@ export default function App() {
                     )}
                   </div>
                   
-                  {gameMode === "multi" && screen === "playing" && (
+                  {(gameMode === "multi" || gameMode === "tutorial") && (screen === "playing" || screen === "tutorial") && (
                     <div className="battle-log-container">
                       {battleLog.map((log) => (
                         <div key={log.id} className={`log-entry log-${log.type}`}>
@@ -1532,11 +1795,11 @@ export default function App() {
                 </div>
 
                 <div className="side">
-                  {gameMode === "multi" ? (
+                  {(gameMode === "multi" || gameMode === "tutorial") ? (
                     <div className="side-card tactical-loadout">
                       <div className="side-title">TACTICAL LOADOUT</div>
                       
-                      <div className={`loadout-item ${attackGauge >= 60 ? "available" : attackGauge >= 20 ? "ready light-ready" : "locked"}`}>
+                      <div className={`loadout-item ${attackGauge >= 60 ? "available" : attackGauge >= 20 ? "ready light-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 6 && attackGauge >= 20 ? "tutorial-pulse" : ""}`}>
                         <div className="loadout-header">
                           <span className="loadout-cost">20G</span>
                           <span className="loadout-name">LIGHT ATTACK</span>
@@ -1545,7 +1808,7 @@ export default function App() {
                         <div className="loadout-desc">確実な小ダメージ（8HP）を与える基本攻撃。<br/>消費が軽く、連発での牽制や削りに最適。</div>
                       </div>
 
-                      <div className={`loadout-item ${attackGauge >= 100 ? "available" : attackGauge >= 60 ? "ready jam-ready" : "locked"}`}>
+                      <div className={`loadout-item ${attackGauge >= 100 ? "available" : attackGauge >= 60 ? "ready jam-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 7 && attackGauge >= 60 ? "tutorial-pulse" : ""}`}>
                         <div className="loadout-header">
                           <span className="loadout-cost">60G</span>
                           <span className="loadout-name">FAKE JAM</span>
@@ -1554,7 +1817,7 @@ export default function App() {
                         <div className="loadout-desc">ダメージ（12HP）に加え、相手の次の2連続キー<br/>を強制的にフェイク化してリズムを崩す。</div>
                       </div>
 
-                      <div className={`loadout-item ${attackGauge >= 100 ? "ready shield-ready" : "locked"}`}>
+                      <div className={`loadout-item ${attackGauge >= 100 ? "ready shield-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 8 && attackGauge >= 100 ? "tutorial-pulse" : ""}`}>
                         <div className="loadout-header">
                           <span className="loadout-cost">MAX</span>
                           <span className="loadout-name">SHIELD</span>
@@ -1614,7 +1877,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {gameMode === "multi" && opponentData && (
+                  {(gameMode === "multi" || gameMode === "tutorial") && opponentData && (
                     <div className={`side-card opponent-card ${enemyHitAnim ? "enemy-hit-anim" : ""}`}>
                       <div className="side-title">Enemy Protocol</div>
                       <div className="feed-row" style={{ fontSize: "14px", marginTop: "4px" }}>
@@ -1682,6 +1945,31 @@ export default function App() {
               </section>
             </>
           )}
+          {screen === "tutorial_complete" && (
+            <div className="center-screen">
+              <div className="panel tutorial-panel" style={{ border: '1px solid #3b82f6', background: 'rgba(37, 99, 235, 0.05)', boxShadow: '0 0 50px rgba(59, 130, 246, 0.15)' }}>
+                <div className="warning" style={{ color: '#93c5fd' }}>Mission Accomplished</div>
+                <h2 className="hero2" style={{ fontSize: "48px", color: '#60a5fa' }}>TUTORIAL COMPLETE</h2>
+                <div className="desc" style={{ fontSize: '18px', color: '#e5e7eb', marginBottom: '40px' }}>
+                  オンラインバトルの基本を習得しました！<br/>
+                  準備ができたら Online Battle に挑戦しましょう。
+                </div>
+                
+                <div className="title-actions" style={{ display: "flex", flexDirection: "column", gap: "16px", alignItems: "center", maxWidth: "400px", margin: "0 auto" }}>
+                  <button className="start-btn multi-btn" onClick={() => { setGameMode("multi"); setScreen("room_input"); }} style={{ width: "100%", background: "#9333ea", borderColor: "#a855f7" }}>
+                    Play Online Battle
+                  </button>
+                  <button className="title-btn" style={{ width: "100%", padding: "16px", fontSize: "16px", color: "#60a5fa", borderColor: "rgba(96, 165, 250, 0.4)" }} onClick={startTutorial}>
+                    Replay Tutorial
+                  </button>
+                  <button className="title-btn" style={{ width: "100%", padding: "16px", fontSize: "16px" }} onClick={goToTitle}>
+                    Back to Title
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </main>
       </div>
     </div>

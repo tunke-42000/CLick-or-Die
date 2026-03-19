@@ -15,7 +15,8 @@ export default function AttackButton({ gauge, onAttack }) {
     label = "ATTACK";
   }
 
-  const handleClick = () => {
+  const handlePointerDown = (e) => {
+    e.preventDefault(); // prevents input from losing focus
     if (isAvailable && onAttack) {
       onAttack();
     }
@@ -25,7 +26,7 @@ export default function AttackButton({ gauge, onAttack }) {
     <div className="attack-button-container">
       <button 
         className={`attack-btn ${stateClass}`} 
-        onClick={handleClick}
+        onPointerDown={handlePointerDown}
         disabled={!isAvailable}
       >
         <div className="attack-label">{label}</div>

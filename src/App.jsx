@@ -1,13 +1,24 @@
+
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/purity */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signInAnonymously } from "firebase/auth";
 import { ref, set, get, onValue, onDisconnect, update, remove, push, onChildAdded, serverTimestamp } from "firebase/database";
 import { auth, db } from "./firebase";
 import clockTick from "./clock-tick.mp3";
-import FlickPad from "./FlickPad";
 import AttackButton from "./AttackButton";
 
-const KEYS = ["あ", "い", "う", "え", "お"];
+const KEYS = [
+  "あ", "い", "う", "え", "お",
+  "か", "き", "く", "け", "こ",
+  "さ", "し", "す", "せ", "そ",
+  "た", "ち", "つ", "て", "と",
+  "な", "に", "ぬ", "ね", "の",
+  "は", "ひ", "ふ", "へ", "ほ",
+  "ま", "み", "む", "め", "も",
+  "や", "ゆ", "よ",
+  "ら", "り", "る", "れ", "ろ",
+  "わ", "を", "ん"
+];
 const GAME_TIME = 60;
 const STARTING_LIVES = 5;
 const TOP_SCORES_KEY = "click-or-die-top3";
@@ -292,11 +303,11 @@ function playMilestoneSound() {
 
 const TUTORIAL_STEPS = [
   { title: "WELCOME TO CLICK MOBILE ONLINE", lines: ["スマホ縦持ち特化のオンラインバトル！", "基本ルールを順番に体験して学びます"] },
-  { title: "STEP 1 / BASIC INPUT", lines: ["中央に表示される文字に合わせて", "画面下部のパッドを入力してください", "まずは「あ」を3回タップしましょう"] },
+  { title: "STEP 1 / BASIC INPUT", lines: ["「ここをタップ」を押してキーボードを開き", "表示された文字を標準フリックで入力してください", "まずは「あ」を3回入力しましょう"] },
   { title: "STEP 2 / FAKE TARGET", lines: ["通常は入力し、紫の異常な文字(FAKE)は", "操作せずにやり過ごしてください", "FAKEを3回正しく無視できればクリアです"] },
   { title: "STEP 3 / BATTLE RULE", lines: ["オンラインでは HP を削り合います", "相手より有利な状態で終われば勝利です"] },
-  { title: "STEP 4 / ATTACK GAUGE", lines: ["正確にフリック入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います", "フリックで素早く入力してみましょう"] },
-  { title: "STEP 5 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "右下の ATTACK ボタンをタップして発動しましょう"] },
+  { title: "STEP 4 / ATTACK GAUGE", lines: ["正確に入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います", "キーボードで素早く入力してみましょう"] },
+  { title: "STEP 5 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "右下の ATTACK ボタンをタップして発動しましょう", "※ボタンを押してもキーボードは閉じません"] },
   { title: "STEP 6 / FAKE JAM", lines: ["FAKE JAM は相手の妨害攻撃です", "次に降ってくる2回の文字が紫のFAKEに化けます", "画面に「FAKE JAM INCOMING」と出たら警戒しましょう"] },
   { title: "STEP 7 / SHIELD ARMOR", lines: ["最大ゲージの SHIELD は永続バフの最上位技です", "12ダメージを与え、自身の被ダメージを永続で8%軽減します", "重ね掛けで最大40%！ボタンをタップして使ってみましょう"] },
   { title: "STEP 8 / WIN CONDITIONS", lines: ["これで全スキルの説明は終わりです", "・正確なフリックでゲージを貯める", "・攻撃や妨害で相手のHPを削る", "・永続バリア(ARMOR)で身を守りつつ戦う", "以上の戦術を駆使して勝利を目指しましょう"] },
@@ -906,9 +917,9 @@ export default function App() {
         setMessage({ text: msg, type: "good", id: Date.now() });
         setCentralNotice({ text: "SHIELD ARMOR +8%", type: "good", subtext: `TOTAL REDUCTION: ${next * 8}%` });
         addBattleLog("good", `Armor +8% & Dealt 12 DMG (${next} Stacks)`);
-        
+
         if (myPlayerRef.current) {
-          update(myPlayerRef.current, { shieldStacks: next }).catch(() => {});
+          update(myPlayerRef.current, { shieldStacks: next }).catch(() => { });
         }
         return next;
       });
@@ -1406,6 +1417,9 @@ export default function App() {
     }
   };
 
+  const [inputValue, setInputValue] = useState("");
+  const isComposingRef = useRef(false);
+
   const handleGameInput = (inputChar) => {
     if (screen !== "playing" && screen !== "tutorial") return;
     if (!currentKey) return;
@@ -1421,6 +1435,30 @@ export default function App() {
     } else {
       if (gameMode === "tutorial") handleTutorialAction("wrong");
       else handleWrong();
+    }
+  };
+
+  const handleCompositionStart = () => {
+    isComposingRef.current = true;
+  };
+
+  const handleCompositionEnd = (e) => {
+    isComposingRef.current = false;
+    const val = e.data || e.target.value;
+    if (val && val.length > 0) {
+      const char = val.slice(-1);
+      handleGameInput(char);
+      setTimeout(() => setInputValue(""), 10);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setInputValue(val);
+    if (!isComposingRef.current && val.length > 0) {
+      const char = val.slice(-1);
+      handleGameInput(char);
+      setTimeout(() => setInputValue(""), 10);
     }
   };
 
@@ -1458,7 +1496,7 @@ export default function App() {
     >
       {flashType && <div className={`flash ${flashType}`} />}
       {shieldActivateAnim && <div className="shield-activate-popup" />}
-      
+
       <div className={`shell ${(screen === "playing" || screen === "tutorial" || screen === "result") ? "compact-mode" : ""}`}>
         <header className="header">
           <div>
@@ -1865,7 +1903,21 @@ export default function App() {
 
                 {(screen === "playing" || (screen === "tutorial" && (tutorialPhase.includes("play") || tutorialPhase.includes("fake")))) && (
                   <div className="mobile-controls-row">
-                    <FlickPad onInput={handleGameInput} />
+                    <div className="native-input-wrap">
+                      <input
+                        type="text"
+                        className="native-flick-input"
+                        placeholder="ここをタップ"
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        onCompositionStart={handleCompositionStart}
+                        onCompositionEnd={handleCompositionEnd}
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck="false"
+                      />
+                    </div>
                     {(gameMode === "multi" || gameMode === "tutorial") && (
                       <AttackButton gauge={attackGauge} onAttack={manualAttackTrigger} />
                     )}

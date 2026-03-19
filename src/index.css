@@ -1330,6 +1330,57 @@ button {
   100% { transform: scale(1.2); opacity: 0; filter: blur(4px); border-width: 0px; }
 }
 
+/* SHIELD ACTIVATE BURST */
+.shield-activate-popup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 4px solid #6ee7b7;
+  background: radial-gradient(circle, rgba(110, 231, 183, 0.4) 0%, rgba(110, 231, 183, 0) 70%);
+  box-shadow: 0 0 40px #6ee7b7, inset 0 0 40px #6ee7b7;
+  pointer-events: none;
+  z-index: 50;
+  animation: shieldDeploy 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.shield-activate-popup::before, .shield-activate-popup::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px dashed rgba(167, 243, 208, 0.8);
+  animation: spinShield 0.8s linear forwards;
+}
+
+.shield-activate-popup::after {
+  inset: -25px;
+  border: 1px solid rgba(110, 231, 183, 0.5);
+  animation: spinShieldReverse 0.8s linear forwards;
+}
+
+@keyframes shieldDeploy {
+  0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0; border-width: 20px; }
+  20% { opacity: 1; border-width: 8px; }
+  50% { transform: translate(-50%, -50%) scale(1.1); filter: brightness(1.5); }
+  80% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1.05); opacity: 0; filter: blur(4px); }
+}
+
+@keyframes spinShield {
+  0% { transform: rotate(0deg) scale(0.5); opacity: 1; }
+  100% { transform: rotate(180deg) scale(1.2); opacity: 0; }
+}
+
+@keyframes spinShieldReverse {
+  0% { transform: rotate(0deg) scale(0.8); opacity: 1; }
+  100% { transform: rotate(-90deg) scale(1.4); opacity: 0; }
+}
+
 /* FAKE JAM AURA on Arena */
 .jam-aura {
   position: absolute;

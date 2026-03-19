@@ -319,6 +319,7 @@ export default function App() {
   const fakeJamChargesRef = useRef(0);
   const [hasShield, setHasShield] = useState(false);
   const [shieldBreakAnim, setShieldBreakAnim] = useState(false);
+  const [shieldActivateAnim, setShieldActivateAnim] = useState(false);
   const [showSkull, setShowSkull] = useState(false);
   const [lastAttackSent, setLastAttackSent] = useState(null);
   const [lastDamageTaken, setLastDamageTaken] = useState(null);
@@ -549,6 +550,7 @@ export default function App() {
               fakeJamChargesRef.current = 0;
               setHasShield(false);
               setShieldBreakAnim(false);
+              setShieldActivateAnim(false);
               setShowSkull(false);
               setLastAttackSent(null);
               setLastDamageTaken(null);
@@ -732,6 +734,8 @@ export default function App() {
     
     if (type === "shield") {
       setHasShield(true);
+      setShieldActivateAnim(true);
+      setTimeout(() => setShieldActivateAnim(false), 800);
       setMessage({ text: msg, type: "good", id: Date.now() });
       setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Next attack blocked" });
       addLog("Deployed SHIELD", "good");
@@ -1391,6 +1395,7 @@ export default function App() {
                 <div className="arena">
                   {hasShield && !shieldBreakAnim && <div className="shield-field" />}
                   {shieldBreakAnim && <div className="shield-field shield-break" />}
+                  {shieldActivateAnim && <div className="shield-activate-popup" />}
                   {fakeJamChargesRef.current > 0 && <div className="jam-aura" />}
                   {showSkull && (
                     <div className="skull-popup">☠</div>

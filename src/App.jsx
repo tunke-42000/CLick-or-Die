@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/purity */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signInAnonymously } from "firebase/auth";
 import { ref, set, get, onValue, onDisconnect, update, remove, push, onChildAdded } from "firebase/database";
@@ -8,7 +9,6 @@ const KEYS = ["A", "S", "D", "F", "J", "K", "L", "Q", "W", "E", "R", "U", "I", "
 const GAME_TIME = 40;
 const STARTING_LIVES = 5;
 const TOP_SCORES_KEY = "click-or-die-top3";
-const FAKE_KEY_CHANCE = 0.08;
 const FAKE_PENALTY = 10;
 
 function pickRandomKey(previous = "") {
@@ -316,9 +316,8 @@ export default function App() {
   const [opponentStatus, setOpponentStatus] = useState(null);
   const [opponentUid, setOpponentUid] = useState(null);
 
-  const jamChargesRef = useRef(0);
-  const fakeBoostChargesRef = useRef(0);
-  const gaugePenaltyRef = useRef(0);
+  const fakeJamChargesRef = useRef(0);
+  const [hasShield, setHasShield] = useState(false);
   const [lastAttackSent, setLastAttackSent] = useState(null);
   const [lastDamageTaken, setLastDamageTaken] = useState(null);
   const [enemyHitAnim, setEnemyHitAnim] = useState(false);
@@ -388,39 +387,37 @@ export default function App() {
   };
 
   const handleIncomingAttack = (type) => {
-    switch(type) {
-      case "light":
-        setBattleHp(s => Math.max(0, s - 8));
-        setMessage({ text: "UNDER ATTACK: LIGHT -8", type: "bad", id: Date.now() });
-        setFlashType("trap");
-        setLastDamageTaken("LIGHT ATTACK");
-        setCentralNotice({ text: "LIGHT ATTACK HIT -8", type: "damage", subtext: "Enemy used Light Attack!" });
-        addLog("Took 8 DMG from LIGHT ATTACK", "damage");
-        break;
-      case "normal":
-        setBattleHp(s => Math.max(0, s - 25));
-        setScore(s => Math.max(0, s - 5));
-        setMessage({ text: "SYSTEM DAMAGED: NORMAL ATTACK", type: "bad", id: Date.now() });
-        setFlashType("trap");
-        setGlitchAnim((prev) => prev + 1);
-        setLastDamageTaken("NORMAL ATTACK");
-        setCentralNotice({ text: "NORMAL ATTACK HIT -25", type: "damage", subtext: "Enemy used Normal Attack!" });
-        addLog("Took 25 DMG from NORMAL ATTACK", "damage");
-        break;
-      case "finisher":
-        setBattleHp(s => Math.max(0, s - 40));
-        fakeBoostChargesRef.current += 3;
-        jamChargesRef.current += 2;
-        setMessage({ text: "CRITICAL: FINISHER HIT!", type: "bad", id: Date.now() });
-        setFlashType("trap");
-        setGlitchAnim(2);
-        playTone({ frequency: 150, sweepTo: 50, duration: 0.8, type: "sawtooth", volume: 0.1 });
-        setLastDamageTaken("FINISHER");
-        setCentralNotice({ text: "FINISHER HIT -40", type: "critical", subtext: "Critical Damage & System Jam!" });
-        addLog("Took 40 DMG from FINISHER", "critical");
-        break;
-      default: break;
-    }
+    setHasShield(currentShield => {
+      if (currentShield) {
+        setCentralNotice({ text: "BLOCKED", type: "good", subtext: "Enemy attack nullified" });
+        addLog("Blocked Enemy Attack", "good");
+        playFakeAvoidSound();
+        return false;
+      }
+      
+      switch(type) {
+        case "light":
+          setBattleHp(s => Math.max(0, s - 8));
+          setMessage({ text: "UNDER ATTACK: LIGHT -8", type: "bad", id: Date.now() });
+          setFlashType("trap");
+          setLastDamageTaken("LIGHT ATTACK");
+          setCentralNotice({ text: "LIGHT ATTACK HIT -8", type: "damage", subtext: "Enemy used Light Attack!" });
+          addLog("Took 8 DMG from LIGHT ATTACK", "damage");
+          break;
+        case "fakejam":
+          setBattleHp(s => Math.max(0, s - 12));
+          fakeJamChargesRef.current += 2;
+          setMessage({ text: "SYSTEM JAMMED: FAKE JAM", type: "bad", id: Date.now() });
+          setFlashType("trap");
+          setGlitchAnim(1);
+          setLastDamageTaken("FAKE JAM");
+          setCentralNotice({ text: "FAKE JAM HIT -12", type: "critical", subtext: "Next 2 keys are FAKE" });
+          addLog("Took 12 DMG and 2 Fakes from FAKE JAM", "critical");
+          break;
+        default: break;
+      }
+      return currentShield;
+    });
   };
 
   const connectToRoom = async (id) => {
@@ -501,9 +498,8 @@ export default function App() {
               setCorrectCount(0);
               setTotalReaction(0);
               setSuccessfulHits(0);
-              jamChargesRef.current = 0;
-              fakeBoostChargesRef.current = 0;
-              gaugePenaltyRef.current = 0;
+              fakeJamChargesRef.current = 0;
+              setHasShield(false);
               setLastAttackSent(null);
               setLastDamageTaken(null);
               setBattleLog([]);
@@ -560,29 +556,17 @@ export default function App() {
 
   const spawnNextKey = (previous = "") => {
     const next = pickRandomKey(previous || currentKey);
-    let fake = Math.random() < FAKE_KEY_CHANCE;
+    let fake = false;
 
-    let fakeChance = FAKE_KEY_CHANCE;
-    if (fakeBoostChargesRef.current > 0) {
-      fakeChance = 0.50; // Boosted fake chance to 50%
-      fakeBoostChargesRef.current -= 1;
-    }
-
-    if (Math.random() < fakeChance) {
+    if (fakeJamChargesRef.current > 0) {
       fake = true;
+      fakeJamChargesRef.current -= 1;
     }
 
     setCurrentKey(next);
     setIsFake(fake);
     setReactionStart(Date.now());
     setSpawnId(Date.now());
-
-    let windowTime = getRoundWindow(score);
-    if (jamChargesRef.current > 0) {
-      windowTime = Math.max(500, windowTime - 150); // don't go below 500ms
-      jamChargesRef.current -= 1;
-    }
-    setActualRoundWindow(windowTime);
   };
 
   const beginPlay = () => {
@@ -605,7 +589,7 @@ export default function App() {
     setCentralNotice(null);
 
     const firstKey = pickRandomKey();
-    const firstFake = Math.random() < FAKE_KEY_CHANCE;
+    const firstFake = false;
 
     setCurrentKey(firstKey);
     setIsFake(firstFake);
@@ -679,17 +663,16 @@ export default function App() {
     
     let type = "light";
     let cost = 20;
-    let msg = "ATTACK SENT: LIGHT ATTACK";
+    let msg = "ATTACK SENT: LIGHT";
 
     if (attackGauge >= 100) {
-      type = "finisher";
+      type = "shield";
       cost = 100;
-      msg = "ATTACK SENT: FINISHER";
-      gaugePenaltyRef.current += 5;
+      msg = "SHIELD DEPLOYED";
     } else if (attackGauge >= 60) {
-      type = "normal";
+      type = "fakejam";
       cost = 60;
-      msg = "ATTACK SENT: NORMAL ATTACK";
+      msg = "ATTACK SENT: FAKE JAM";
     } else if (attackGauge >= 20) {
       type = "light";
       cost = 20;
@@ -697,7 +680,15 @@ export default function App() {
     }
 
     setAttackGauge(prev => Math.max(0, prev - cost));
-    sendAttack(type, msg);
+    
+    if (type === "shield") {
+      setHasShield(true);
+      setMessage({ text: msg, type: "good", id: Date.now() });
+      setCentralNotice({ text: "SHIELD ON", type: "good", subtext: "Next attack blocked" });
+      addLog("Deployed SHIELD", "good");
+    } else {
+      sendAttack(type, msg);
+    }
   };
 
   const addGauge = (amount) => {
@@ -740,11 +731,6 @@ export default function App() {
       if (nextCombo >= 20) g += 3;
       else if (nextCombo >= 10) g += 2;
       else if (nextCombo >= 5) g += 1;
-
-      if (gaugePenaltyRef.current > 0) {
-        g = Math.floor(g / 2);
-        gaugePenaltyRef.current -= 1;
-      }
 
       addGauge(g);
     }
@@ -906,10 +892,11 @@ export default function App() {
         battleHp, 
         attackGauge, 
         lives,
+        hasShield,
         status: battleHp <= 0 ? "dead" : "alive" 
       }).catch(() => {});
     }
-  }, [score, battleHp, attackGauge, lives, gameMode, screen, myUid]);
+  }, [score, battleHp, attackGauge, lives, hasShield, gameMode, screen, myUid]);
 
   useEffect(() => {
     if (gameMode === "multi" && screen === "playing") {
@@ -1270,14 +1257,14 @@ export default function App() {
                     else if (battleHp < eHp) { leadStatus = "LOSING"; leadClass = "losing"; }
                     
                     const getNextAttackInfo = (gauge) => {
-                      if (gauge >= 100) return { label: "SPACE: FINISHER", color: "#ef4444" };
-                      if (gauge >= 60) return { label: "SPACE: NORMAL ATTACK", color: "#fcd34d" };
+                      if (gauge >= 100) return { label: "SPACE: SHIELD", color: "#6ee7b7" };
+                      if (gauge >= 60) return { label: "SPACE: FAKE JAM", color: "#d8b4fe" };
                       if (gauge >= 20) return { label: "SPACE: LIGHT ATTACK", color: "#93c5fd" };
                       return { label: "NEXT: LIGHT ATTACK", color: "#9ca3af" };
                     };
                     const getEnemyAttackInfo = (gauge) => {
-                      if (gauge >= 100) return { label: "READY: FINISHER", color: "#ef4444" };
-                      if (gauge >= 60) return { label: "READY: NORMAL ATTACK", color: "#fcd34d" };
+                      if (gauge >= 100) return { label: "READY: SHIELD", color: "#6ee7b7" };
+                      if (gauge >= 60) return { label: "READY: FAKE JAM", color: "#d8b4fe" };
                       if (gauge >= 20) return { label: "READY: LIGHT ATTACK", color: "#93c5fd" };
                       return { label: "NEXT: LIGHT ATTACK", color: "#9ca3af" };
                     };
@@ -1291,6 +1278,7 @@ export default function App() {
                         <div className="vs-player">
                           <div className="vs-name">YOU</div>
                           <div className="vs-hp-bar">
+                            {hasShield && <div className="shield-overlay" />}
                             <div className="vs-hp-fill" style={{ width: `${Math.max(0, Math.min(100, (battleHp/60)*100))}%`, background: battleHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, battleHp)}</div>
@@ -1314,6 +1302,7 @@ export default function App() {
                             {opponentStatus === "disconnected" ? "ENEMY (OFFLINE)" : "ENEMY"}
                           </div>
                           <div className="vs-hp-bar">
+                            {opponentData?.hasShield && <div className="shield-overlay enemy-shield" />}
                             <div className="vs-hp-fill enemy" style={{ width: `${Math.max(0, Math.min(100, (eHp/60)*100))}%`, background: eHp <= 12 ? "#ef4444" : "#22c55e" }} />
                           </div>
                           <div className="vs-hp-val">{Math.max(0, eHp)}</div>

@@ -296,7 +296,7 @@ const TUTORIAL_STEPS = [
   { title: "STEP 4 / ATTACK GAUGE", lines: ["正確に入力すると ATTACK GAUGE が貯まります", "このゲージを使って攻撃や防御を行います"] },
   { title: "STEP 5 / LIGHT ATTACK", lines: ["ゲージが20以上あると LIGHT ATTACK が使えます", "SPACEキーを押して発動してみましょう"] },
   { title: "STEP 6 / FAKE JAM", lines: ["FAKE JAM は相手の妨害攻撃です", "次に降ってくる2回のキーが紫のFAKEに化けます", "画面に「FAKE JAM INCOMING」と出たら警戒しましょう"] },
-  { title: "STEP 7 / SHIELD ARMOR", lines: ["最大ゲージの SHIELD ARMOR は永続バフの最上位技です", "10ダメージを与え、自身の被ダメージを永続で8%軽減します", "重ね掛けで最大40%まで防御を強化できます。使ってみましょう"] },
+  { title: "STEP 7 / SHIELD ARMOR", lines: ["最大ゲージの SHIELD ARMOR は永続バフの最上位技です", "12ダメージを与え、自身の被ダメージを永続で8%軽減します", "重ね掛けで最大40%まで防御を強化できます。使ってみましょう"] },
   { title: "STEP 8 / WIN CONDITIONS", lines: ["これで全スキルの説明は終わりです", "・正確に早くキーを押してゲージを貯める", "・攻撃や妨害で相手のHPを削る", "・永続バリア(ARMOR)で身を守りつつ戦う", "以上の戦術を駆使して勝利しましょう"] },
   { title: "STEP 9 / PRACTICE BATTLE", lines: ["最後に練習試合をしてみましょう", "学んだ操作を使って勝利を目指してください"] },
 ];
@@ -417,7 +417,7 @@ export default function App() {
 
     switch (type) {
       case "light":
-        const dmgLight = getReducedDamage(8);
+        const dmgLight = getReducedDamage(5);
         setEnemyHitAnim(true);
         setTimeout(() => setEnemyHitAnim(false), 500);
         setBattleHp(s => Math.max(0, s - dmgLight));
@@ -428,7 +428,7 @@ export default function App() {
         addBattleLog("damage", `Took ${dmgLight} DMG from LIGHT ATTACK`);
         break;
       case "shield_attack":
-        const dmgShield = getReducedDamage(10);
+        const dmgShield = getReducedDamage(12);
         setEnemyHitAnim(true);
         setTimeout(() => setEnemyHitAnim(false), 500);
         setBattleHp(s => Math.max(0, s - dmgShield));
@@ -439,7 +439,7 @@ export default function App() {
         addBattleLog("damage", `Took ${dmgShield} DMG from SHIELD STRIKE`);
         break;
       case "fakejam":
-        const dmgJam = getReducedDamage(12);
+        const dmgJam = getReducedDamage(10);
         setBattleHp(s => Math.max(0, s - dmgJam));
         fakeJamChargesRef.current += 2;
         setMessage({ text: `SYSTEM JAMMED: FAKE JAM -${dmgJam}`, type: "bad", id: Date.now() });
@@ -829,7 +829,7 @@ export default function App() {
         setCentralNotice({ text: "LIGHT ATTACK", type: "attack", subtext: "Attack Success!" });
         setEnemyHitAnim(true);
         setTimeout(() => setEnemyHitAnim(false), 500);
-        setOpponentData(prev => ({ ...prev, battleHp: prev.battleHp - 8 }));
+        setOpponentData(prev => ({ ...prev, battleHp: prev.battleHp - 5 }));
         setTutorialPhase("success");
       } else if (tutorialStep === 7 && attackGauge >= 100) {
         if (tutorialPhase !== "play") return;
@@ -838,8 +838,8 @@ export default function App() {
         setShieldActivateAnim(true);
         setTimeout(() => setShieldActivateAnim(false), 800);
 
-        setCentralNotice({ text: "SHIELD ARMOR +8%", type: "good", subtext: "ENEMY TOOK 10 DMG!" });
-        setOpponentData(prev => ({ ...prev, battleHp: Math.max(0, prev.battleHp - 10) }));
+        setCentralNotice({ text: "SHIELD ARMOR +8%", type: "good", subtext: "ENEMY TOOK 12 DMG!" });
+        setOpponentData(prev => ({ ...prev, battleHp: Math.max(0, prev.battleHp - 12) }));
         setEnemyHitAnim(true);
         setTimeout(() => setEnemyHitAnim(false), 500);
 
@@ -850,9 +850,9 @@ export default function App() {
       } else if (tutorialStep === 9 && attackGauge >= 20) {
         // Practice battle manual attack
         let type = "light"; let cost = 20; let msg = "LIGHT ATTACK";
-        let damage = 8;
-        if (attackGauge >= 100) { type = "shield_attack"; cost = 100; msg = "SHIELD ARMOR DEPLOYED"; damage = 10; }
-        else if (attackGauge >= 60) { type = "fakejam"; cost = 60; msg = "FAKE JAM"; damage = 12; }
+        let damage = 5;
+        if (attackGauge >= 100) { type = "shield_attack"; cost = 100; msg = "SHIELD ARMOR DEPLOYED"; damage = 12; }
+        else if (attackGauge >= 60) { type = "fakejam"; cost = 60; msg = "FAKE JAM"; damage = 10; }
 
         setAttackGauge(prev => Math.max(0, prev - cost));
         if (type === "shield_attack") {
@@ -863,7 +863,7 @@ export default function App() {
           });
           setShieldActivateAnim(true);
           setTimeout(() => setShieldActivateAnim(false), 800);
-          setOpponentData(prev => ({ ...prev, battleHp: Math.max(0, prev.battleHp - 10) }));
+          setOpponentData(prev => ({ ...prev, battleHp: Math.max(0, prev.battleHp - 12) }));
           setEnemyHitAnim(true);
           setTimeout(() => setEnemyHitAnim(false), 500);
         } else {
@@ -907,7 +907,7 @@ export default function App() {
         const next = Math.min(5, prev + 1);
         setMessage({ text: msg, type: "good", id: Date.now() });
         setCentralNotice({ text: "SHIELD ARMOR +8%", type: "good", subtext: `TOTAL REDUCTION: ${next * 8}%` });
-        addBattleLog("good", `Armor +8% & Dealt 10 DMG (${next} Stacks)`);
+        addBattleLog("good", `Armor +8% & Dealt 12 DMG (${next} Stacks)`);
         
         if (myPlayerRef.current) {
           update(myPlayerRef.current, { shieldStacks: next }).catch(() => {});
@@ -1891,7 +1891,7 @@ export default function App() {
                           <span className="loadout-name">LIGHT ATTACK</span>
                           <span className="loadout-tag light">CHIP</span>
                         </div>
-                        <div className="loadout-desc">確実な小ダメージ（8HP）を与える基本攻撃。<br />消費が軽く、連発での牽制や削りに最適。</div>
+                        <div className="loadout-desc">確実な小ダメージ（5HP）を与える基本攻撃。<br />消費が軽く、連発での牽制や削りに最適。</div>
                       </div>
 
                       <div className={`loadout-item ${attackGauge >= 100 ? "available" : attackGauge >= 60 ? "ready jam-ready" : "locked"}`}>
@@ -1900,7 +1900,7 @@ export default function App() {
                           <span className="loadout-name">FAKE JAM</span>
                           <span className="loadout-tag jam">DISRUPT</span>
                         </div>
-                        <div className="loadout-desc">ダメージ（12HP）に加え、相手の次の2連続キー<br />を強制的にフェイク化してリズムを崩す。</div>
+                        <div className="loadout-desc">ダメージ（10HP）に加え、相手の次の2連続キー<br />を強制的にフェイク化してリズムを崩す。</div>
                       </div>
 
                       <div className={`loadout-item ${attackGauge >= 100 ? "ready shield-ready" : "locked"} ${gameMode === "tutorial" && tutorialStep === 7 && attackGauge >= 100 ? "tutorial-pulse" : ""}`}>
@@ -1909,7 +1909,7 @@ export default function App() {
                           <span className="loadout-name">SHIELD ARMOR</span>
                           <span className="loadout-tag shield">ARMOR</span>
                         </div>
-                        <div className="loadout-desc">発動時に10ダメージを与えつつ、自身の受ける<br />ダメージを永続で8%軽減する。（最大40%）</div>
+                        <div className="loadout-desc">発動時に12ダメージを与えつつ、自身の受ける<br />ダメージを永続で8%軽減する。（最大40%）</div>
                       </div>
 
                       <div className="loadout-status">

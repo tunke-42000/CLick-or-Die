@@ -711,6 +711,112 @@ button {
   color: rgba(255, 255, 255, 0.45);
 }
 
+.tactical-loadout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.loadout-item {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 12px;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.loadout-item.locked {
+  opacity: 0.4;
+  filter: grayscale(0.8);
+}
+
+.loadout-item.available {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  opacity: 0.8;
+}
+
+.loadout-item.ready {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.03);
+  z-index: 5;
+}
+
+.loadout-item.ready.light-ready {
+  border-color: rgba(147, 197, 253, 0.8);
+  box-shadow: 0 0 15px rgba(147, 197, 253, 0.3);
+}
+
+.loadout-item.ready.jam-ready {
+  border-color: rgba(216, 180, 254, 0.8);
+  box-shadow: 0 0 15px rgba(216, 180, 254, 0.3);
+}
+
+.loadout-item.ready.shield-ready {
+  border-color: rgba(110, 231, 183, 0.8);
+  box-shadow: 0 0 20px rgba(110, 231, 183, 0.4);
+}
+
+.loadout-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.loadout-cost {
+  font-size: 10px;
+  font-weight: 900;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.loadout-name {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  flex: 1;
+}
+
+.loadout-tag {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.loadout-tag.light { background: rgba(147, 197, 253, 0.15); color: #93c5fd; border: 1px solid rgba(147, 197, 253, 0.4); }
+.loadout-tag.jam { background: rgba(216, 180, 254, 0.15); color: #d8b4fe; border: 1px solid rgba(216, 180, 254, 0.4); }
+.loadout-tag.shield { background: rgba(110, 231, 183, 0.15); color: #6ee7b7; border: 1px solid rgba(110, 231, 183, 0.4); }
+
+.loadout-desc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.4;
+}
+
+.loadout-status {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #fcd34d;
+  background: rgba(252, 211, 77, 0.1);
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(252, 211, 77, 0.3);
+  animation: pulseStatus 2s infinite alternate;
+}
+
+@keyframes pulseStatus {
+  from { box-shadow: 0 0 5px rgba(252, 211, 77, 0.1); }
+  to { box-shadow: 0 0 15px rgba(252, 211, 77, 0.3); }
+}
+
 .feed-row {
   display: flex;
   justify-content: space-between;

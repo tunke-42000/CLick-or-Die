@@ -1470,27 +1470,67 @@ export default function App() {
                 </div>
 
                 <div className="side">
-                  <div className="side-card">
-                    <div className="side-title">Combat Feed</div>
-                    <div className="feed-row">
-                      <span>Combo</span>
-                      <span key={`side-${combo}`} className="feed-strong feed-red combo-side-anim">{combo}</span>
+                  {gameMode === "multi" ? (
+                    <div className="side-card tactical-loadout">
+                      <div className="side-title">TACTICAL LOADOUT</div>
+                      
+                      <div className={`loadout-item ${attackGauge >= 60 ? "available" : attackGauge >= 20 ? "ready light-ready" : "locked"}`}>
+                        <div className="loadout-header">
+                          <span className="loadout-cost">20G</span>
+                          <span className="loadout-name">LIGHT ATTACK</span>
+                          <span className="loadout-tag light">CHIP</span>
+                        </div>
+                        <div className="loadout-desc">小ダメージ基本攻撃・牽制用</div>
+                      </div>
+
+                      <div className={`loadout-item ${attackGauge >= 100 ? "available" : attackGauge >= 60 ? "ready jam-ready" : "locked"}`}>
+                        <div className="loadout-header">
+                          <span className="loadout-cost">60G</span>
+                          <span className="loadout-name">FAKE JAM</span>
+                          <span className="loadout-tag jam">DISRUPT</span>
+                        </div>
+                        <div className="loadout-desc">ダメージ＋相手の次2回キーをフェイク化</div>
+                      </div>
+
+                      <div className={`loadout-item ${attackGauge >= 100 ? "ready shield-ready" : "locked"}`}>
+                        <div className="loadout-header">
+                          <span className="loadout-cost">MAX</span>
+                          <span className="loadout-name">SHIELD</span>
+                          <span className="loadout-tag shield">DEFEND</span>
+                        </div>
+                        <div className="loadout-desc">次に受ける相手攻撃を1回無効化</div>
+                      </div>
+
+                      <div className="loadout-status">
+                        {attackGauge >= 100 ? "SHIELD DEPLOYMENT READY" :
+                         attackGauge >= 60 ? "FAKE JAM READY" :
+                         attackGauge >= 20 ? "LIGHT ATTACK READY" :
+                         "Build gauge to unlock attacks"}
+                      </div>
                     </div>
-                    <div className="feed-row">
-                      <span>Max Combo</span>
-                      <span className="feed-strong">{maxCombo}</span>
+                  ) : (
+                    <div className="side-card">
+                      <div className="side-title">Combat Feed</div>
+                      <div className="feed-row">
+                        <span>Combo</span>
+                        <span key={`side-${combo}`} className="feed-strong feed-red combo-side-anim">{combo}</span>
+                      </div>
+                      <div className="feed-row">
+                        <span>Max Combo</span>
+                        <span className="feed-strong">{maxCombo}</span>
+                      </div>
+                      <div className="feed-row">
+                        <span>Avg Reaction</span>
+                        <span className="feed-strong">
+                          {avgReaction ? `${avgReaction} ms` : "--"}
+                        </span>
+                      </div>
+                      <div className="feed-row">
+                        <span>Hit</span>
+                        <span className="feed-strong">{correctCount}</span>
+                      </div>
                     </div>
-                    <div className="feed-row">
-                      <span>Avg Reaction</span>
-                      <span className="feed-strong">
-                        {avgReaction ? `${avgReaction} ms` : "--"}
-                      </span>
-                    </div>
-                    <div className="feed-row">
-                      <span>Hit</span>
-                      <span className="feed-strong">{correctCount}</span>
-                    </div>
-                  </div>
+                  )}
 
                   {screen === "playing" && gameMode === "single" && (
                     <div className="side-card">

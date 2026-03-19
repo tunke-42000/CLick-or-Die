@@ -1480,7 +1480,7 @@ export default function App() {
                           <span className="loadout-name">LIGHT ATTACK</span>
                           <span className="loadout-tag light">CHIP</span>
                         </div>
-                        <div className="loadout-desc">小ダメージ基本攻撃・牽制用</div>
+                        <div className="loadout-desc">確実な小ダメージ（8HP）を与える基本攻撃。<br/>消費が軽く、連発での牽制や削りに最適。</div>
                       </div>
 
                       <div className={`loadout-item ${attackGauge >= 100 ? "available" : attackGauge >= 60 ? "ready jam-ready" : "locked"}`}>
@@ -1489,7 +1489,7 @@ export default function App() {
                           <span className="loadout-name">FAKE JAM</span>
                           <span className="loadout-tag jam">DISRUPT</span>
                         </div>
-                        <div className="loadout-desc">ダメージ＋相手の次2回キーをフェイク化</div>
+                        <div className="loadout-desc">ダメージ（12HP）に加え、相手の次の2連続キー<br/>を強制的にフェイク化してリズムを崩す。</div>
                       </div>
 
                       <div className={`loadout-item ${attackGauge >= 100 ? "ready shield-ready" : "locked"}`}>
@@ -1498,14 +1498,14 @@ export default function App() {
                           <span className="loadout-name">SHIELD</span>
                           <span className="loadout-tag shield">DEFEND</span>
                         </div>
-                        <div className="loadout-desc">次に受ける相手攻撃を1回無効化</div>
+                        <div className="loadout-desc">次に受ける相手の攻撃や妨害効果を1度だけ<br/>完全に無効化する防御用バリアを展開する。</div>
                       </div>
 
                       <div className="loadout-status">
                         {attackGauge >= 100 ? "SHIELD DEPLOYMENT READY" :
                          attackGauge >= 60 ? "FAKE JAM READY" :
                          attackGauge >= 20 ? "LIGHT ATTACK READY" :
-                         "Build gauge to unlock attacks"}
+                         "BUILD GAUGE TO UNLOCK ATTACK"}
                       </div>
                     </div>
                   ) : (

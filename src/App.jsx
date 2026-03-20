@@ -1133,8 +1133,12 @@ export default function App() {
       } else if (opponentData && opponentData.battleHp <= 0) {
         endGame();
       }
+    } else if (gameMode === "tutorial" && screen === "tutorial" && tutorialStep === 9 && tutorialPhase === "play") {
+      if (opponentData && opponentData.battleHp <= 0) {
+        setTutorialPhase("success");
+      }
     }
-  }, [battleHp, opponentData, screen, gameMode]);
+  }, [battleHp, opponentData, screen, gameMode, tutorialStep, tutorialPhase]);
 
   useEffect(() => {
     if (screen === "playing" && gameMode === "multi" && opponentStatus === "disconnected") {
